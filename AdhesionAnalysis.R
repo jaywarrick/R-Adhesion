@@ -1,20 +1,32 @@
 # Adhesion Analysis with Liz
 rm(list=ls())
 source('~/.Rprofile')
-source('/Users/jaywarrick/Documents/MMB_Lab_2/Projects/Adhesion/TestAnalysis/AdhesionAnalysis_HelperFunctions.R')
+source('/Users/jaywarrick/Public/DropBox/GitHub/R-Adhesion/AdhesionAnalysis_HelperFunctions.R')
 
 ##### Analysis #####
 
 # Remember cell 328
 path <- '/Volumes/BeebeBig/Jay/JEX Databases/Adhesion FACS/Test/Cell_x0_y0/Roi-Tracks/x0_y0.jxd'
 path2 <- '/Volumes/BeebeBig/Jay/JEX Databases/Adhesion FACS/RPMI P-Sel 5Hz-100mHz/Cell_x0_y0/Roi-Tracks Roi/x0_y0.jxd'
+path3 <- '/Users/jaywarrick/Documents/JEX/Raw Data/LNCaP.arff'
 
-trackListImport <- new('trackList', tracksFilePath=path, fi=5, ff=5, ti=0, tf=500, samplingFreq=0.5)
-trackList <- filterTrackList(trackListImport, trackLengthFilter, min=4)
+# Determine samplingFreq if necessary
+if(is.na(samplingFreq))
+{
+     temp <- seq(ti, tf, length.out=length.out)
+     samplingFreq <- 1 / (temp[2]-temp[1])
+}
+
+trackListImport <- trackListFromFile(file=path3, sin=TRUE, fi=1, ff=0.1, t=seq(0, 515, 1))
+trackList <- filterTrackList(trackListImport, trackLengthFilter, min=10)
+trackList <- filterTrackList(trackList, trackFrameFilter, endMin=length(trackList@tAll)-1)
+trackList <- sortTrackList(trackList)
 plot(trackList, slot='vx')
-trackList <- setTrackListSinPhaseShift(object=trackList)
-aTrack <- trackList@tracks[[5001]]
-plot(aTrack, slotY='vx')
+trackList <- setTrackListPhaseShift(object=trackList)
+aTrack <- getTrack(trackList, 2319)
+plot(aTrack, slotY='vx', relY=FALSE)
+plotFit(aTrack, xlab='Time [s]', ylab='Velocity [pixel/s]')
+trackListF <- filterTrackList(trackList, trackLengthFilter, min=4)
 
 validTrack <- setValidTimeIndices(aTrack, applyWobbleFilter=T)
 plotFit(validTrack)
@@ -46,14 +58,10 @@ lines(aTrack@t, normalize(aTrack@x), col='black')
 ##### Test Stuff #####
 
 
-
-duh <- list(a='hi', b='there')
-duh2 <- 'c'
-duh <- append(duh, list(duh2='you'))
-duh
-
-length(trackList)
-
-
+# library(foreign)
+# tracksFile <- read.arff(path)
+# tracksFile2 <- reorganizeTable(tracksFile, nameCol='Metadata')
+# row=6076
+# duh <- new('track',tracksFile2[row,'Track'], tracksFile2[row,'polygonPts'], tracksFile2[row,'patternPts'], fi=0.2, ff=0.01, ti=0, tf=500, length.out=2361)
 
 
