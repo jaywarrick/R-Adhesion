@@ -1,7 +1,7 @@
 results <- comparison()
 library(foreign)
 write.arff(results, file='~/Documents/MMB/Projects/Adhesion/R/Testing/TrackingMethodsResults.txt')
-results <- read.arff(file='~/Documents/MMB/Projects/Adhesion/R/Testing/TrackingMethodsResults.txt')
+results <- read.arff(file='~/Documents/MMB/Projects/Adhesion/R/Testing/20140826_TrackingMethodsResults.txt')
 
 plotMethod(results, 'error1Mean', normalize=TRUE)
 plotMethod(results, 'error2Mean', normalize=TRUE)
