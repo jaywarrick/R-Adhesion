@@ -1,9 +1,11 @@
-rm(list=ls())
+rm(list=ls()[!(ls() %in% 'maximaList')])
 
 source('~/.Rprofile')
 source('~/Public/DropBox/GitHub/R-Adhesion/Tracking.R')
 source('~/Public/DropBox/GitHub/R-Adhesion/ADhesionAnalysis_HelperFunctions.R')
 library(foreign)
+library(pracma)
+
 path1 <- '/Users/jaywarrick/Documents/JEX/LocalTest/temp/JEXData0000000001.arff'
 path2 <- '/Users/jaywarrick/Documents/JEX/LocalTest/PC3 vs LNCaP/Cell_x0_y0/Roi-Maxima Upper/x0_y0.jxd'
 fileTable <- read.arff(path1)
@@ -122,7 +124,7 @@ MaximaList <- setRefClass('MaximaList',
                                {
                                     return(base::length(maxima))
                                },
-                               trackBack = function(startFrame, endFrame, maxDist=150, direction=c(1,0,0), directionality=10, uniformityDistThresh=15, digits=1)
+                               trackBack = function(startFrame, endFrame, maxDist=150, direction=c(1,0,0), directionality=10, uniformityDistThresh=3, digits=1)
                                {
                                     if(startFrame >= length() | startFrame < 0 | endFrame >= length() | endFrame >= startFrame | endFrame < 0)
                                     {
@@ -130,12 +132,12 @@ MaximaList <- setRefClass('MaximaList',
                                     }
                                     trackBackStart <<- startFrame
                                     trackBackEnd <<- endFrame
-                                    currentMaxima <- .self$getMaxima(startFrame)
-                                    previousMaxima <- .self$getMaxima(startFrame-1)
+                                    currentMaxima <- getMaxima(startFrame)
+                                    previousMaxima <- getMaxima(startFrame-1)
                                     maxID <<- max(currentMaxima$points$id)
-                                    while(!is.null(previousMaxima) & previousMaxima$frame >= endFrame)
+                                    while(!is.null(previousMaxima) && previousMaxima$frame >= endFrame)
                                     {
-                                         cat("Current frame: ", currentMaxima$frame, "\n", sep="")
+                                         cat("Linking frame: ", currentMaxima$frame, "\n", sep="")
                                          t1 <- currentMaxima$getXYZ()
                                          t0 <- previousMaxima$getXYZ() # maxima to prepend
                                          results <- DirectionalLinearAssignment(points=list(t0=t0, t1=t1), maxDist=maxDist, direction=direction, directionality=directionality, uniformityDistThresh=uniformityDistThresh, digits=digits)
@@ -169,9 +171,9 @@ MaximaList <- setRefClass('MaximaList',
                                                    # We don't need to do anything
                                               }
                                          }
-                                         .self$setMaxima(newMaxima)
+                                         setMaxima(newMaxima)
                                          currentMaxima <- newMaxima
-                                         previousMaxima <- .self$getMaxima(newMaxima$frame - 1)
+                                         previousMaxima <- getMaxima(newMaxima$frame - 1)
                                     }
                                     cat("Done tracking. Trimming Data to start and end frame")
                                     allFrameNames <- as.numeric(names(maxima))
@@ -188,22 +190,52 @@ MaximaList <- setRefClass('MaximaList',
                                     {
                                          exportFrames <- frameRange[1]:frameRange[2]
                                     }
-                                    exportIndices <- exportFrames + 1
-                                    trackList <- new('TrackList', sin=sin, fi=fi, ff=ff, tAll=tAll[exportIndices])
+                                    trackList <- new('TrackList', sin=sin, fi=fi, ff=ff, tAll=tAll)
                                     count = 0
                                     total = base::length(exportFrames)
-                                    for(maxima in maximaList$maxima[exportIndices])
+                                    for(f in exportFrames)
                                     {
-                                         for(i in 1:maxima$length())
-                                         {
-                                              data <- maxima$points[i,]
-                                              trackList$addTrackPoint(id=data$id, x=data$x, y=data$y, t=tAll[maxima$frame+1], frame=maxima$frame)
+                                         .maxima <- getMaxima(f)
+                                         for(i in 1:.maxima$length())
+                                         {    
+                                              data <- .maxima$points[i,]
+                                              trackList$addTrackPoint(id=data$id, x=data$x, y=data$y, t=tAll[.maxima$frame+1], frame=.maxima$frame)
                                          }
                                          count <- count + 1
-                                         cat("Percent complete: ", round(100*count/total, digits=2), "%\n", sep="")
+                                         cat("Generating TrackList: ", round(100*count/total, digits=2), "%\n", sep="")
                                     }
                                     trackList$calculateVelocities()
                                     return(trackList)
+                               },
+                               getProp = function(fun=function(.maxima){return(base::range(.maxima$points$x))})
+                               {
+                                    ret <- list()
+                                    for(.maxima in maxima)
+                                    {
+                                         ret[[as.character(.maxima$frame)]] <- fun(.maxima)
+                                    }
+                                    return(ret)
+                               },
+                               generateMaximaPlots = function(path=NULL, baseName='Frame_')
+                               {
+                                    dir.create(path, recursive=TRUE)
+                                    wd <- getwd()
+                                    setwd(path)
+                                    xlim <- base::range(unlist(getProp(fun=function(.maxima){return(base::range(.maxima$points$x))})))
+                                    ylim <- base::range(unlist(getProp(fun=function(.maxima){return(base::range(.maxima$points$y))})))
+                                    
+                                    makeThePlots <- function()
+                                    {
+                                         for(.maxima in maxima)
+                                         {
+                                              cat("Plotting Frame = ", .maxima$frame, "\n", sep="")
+                                              pdf(file=paste(path, '/', baseName, .maxima$frame, '.pdf', sep=''), width=9, height=4)
+                                              .maxima$plotMaxima(IDs=TRUE, xlim=xlim, ylim=ylim, main=as.character(.maxima$frame))
+                                              dev.off()
+                                         }
+                                    }
+                                    
+                                    tryCatch(expr=makeThePlots(), finally=setwd(wd))
                                }
                           )
 )
@@ -213,27 +245,25 @@ MaximaList <- setRefClass('MaximaList',
 TrackList <- setRefClass('TrackList',
                          fields = list(tracks='list', sin='logical', fi='numeric', ff='numeric', tAll='numeric', phaseShift='numeric'),
                          methods = list(
-                              initializeWithFile = function(object, file=NULL, sin=FALSE, fi, ff, tAll)
+                              initializeWithFile = function(file=NULL, sin=FALSE, fi, ff, tAll)
                               {
                                    library(foreign)
                                    tracksFile <- read.arff(file)
                                    tracksFile2 <- reorganizeTable(tracksFile, nameCol='Metadata')
                                    
-                                   duh <- list()
                                    for(row in 1:nrow(tracksFile2))
                                    {
                                         id <- tracksFile2[row,'Track']
                                         start <- tracksFile2[row,'polygonPts']
                                         pattern <- tracksFile2[row,'patternPts']
-                                        newTrack <- trackFromTrackROI(id=id, sin=sin, fi=fi, ff=ff, tAll=tAll, start=start, pattern=pattern)
-                                        duh[as.character(tracksFile2[row,'Track'])] <- newTrack
+                                        newTrack <- new('Track')
+                                        newTrack$initializeWithTrackROI(id=id, start=start, pattern=pattern, tAll=tAll)
+                                        setTrack(newTrack)
                                    }
-                                   
                                    sin <<- sin
                                    fi <<- fi
                                    ff <<- ff
                                    tAll <<- tAll
-                                   tracks <<- duh
                               },
                               length = function()
                               {
@@ -251,20 +281,37 @@ TrackList <- setRefClass('TrackList',
                                    Ymin <- min(yRanges[,1], na.rm=TRUE)
                                    Ymax <- max(yRanges[,2], na.rm=TRUE)
                                    
-                                   xlim <- c(Xmin, Xmax)
-                                   ylim <- c(Ymin, Ymax)
+                                   args <- list(...)
+                                   if(is.null(args$xlim))
+                                   {
+                                        xlim <- c(Xmin, Xmax)
+                                   }
+                                   else
+                                   {
+                                        xlim <- args$xlim
+                                        args$xlim <- NULL
+                                   }
+                                   if(is.null(args$ylim))
+                                   {
+                                        ylim <- c(Ymin, Ymax)
+                                   }
+                                   else
+                                   {
+                                        ylim <- args$ylim
+                                        args$ylim <- NULL
+                                   }
                                    
                                    first <- TRUE
                                    for(track in tracks)
                                    {
                                         if(first)
                                         {
-                                             track$plotTrack(slotY=slot, relY=rel, add=F, xlim=xlim, ylim=ylim, withTitle=FALSE, main='All Tracks', ...)
+                                             do.call(track$plotTrack, c(list(slotY=slot, relY=rel, add=F, xlim=xlim, ylim=ylim, withTitle=FALSE, main='All Tracks'), args))
                                              first = FALSE
                                         }
                                         else
                                         {
-                                             track$plotTrack(slotY=slot, relY=rel, add=T, ...)
+                                             do.call(track$plotTrack, c(list(slotY=slot, relY=rel, add=T), args))
                                         }
                                    }
                               },
@@ -292,7 +339,7 @@ TrackList <- setRefClass('TrackList',
                               },
                               addTrackPoint = function(id, x, y, t, frame)
                               {
-                                   track <- .self$getTrack(id)
+                                   track <- getTrack(id)
                                    if(is.null(track))
                                    {
                                         track <- new('Track')
@@ -300,7 +347,7 @@ TrackList <- setRefClass('TrackList',
                                         # track$.parent <- .self # setTrack resets .parent
                                    }
                                    track$addPoint(x=x, y=y, t=t, frame=frame)
-                                   .self$setTrack(track)
+                                   setTrack(track)
                               },
                               calculateVelocities = function()
                               {
@@ -308,7 +355,53 @@ TrackList <- setRefClass('TrackList',
                                    {
                                         track$calculateVelocities()
                                    }
-                              }
+                              },
+                              smoothVelocities = function(fit, dist, maxWidth)
+                              {
+                                   widths <- getWindowWidths(fit=fit, trackList=.self, dist=dist, maxWidth=maxWidth)
+                                   tot <- base::length(names(tracks))
+                                   count <- 1
+                                   for(track in tracks)
+                                   {
+                                        cat("Smoothing velocities for track ", count, " of ", tot, ".\n", sep="")
+                                        track$smoothVelocities(widths)
+                                        count <- count + 1
+                                   }
+                              },
+                              applyToTracks = function(fun, ...)
+                              {
+                                   for(track in tracks)
+                                   {
+                                        track <- fun(track, ...)
+                                   }
+                              },
+                              filterTracks = function(fun, ...)
+                              {
+                                   tracks <<- Filter(function(x){fun(x,...)}, tracks)
+                              },
+                              sortTracks = function(fun=function(x){return(x$length())}, decreasing=TRUE, ...)
+                              {
+                                   ret <- getProp(fun=fun, ...)
+                                   sorted <- sort(unlist(ret), index.return=T, decreasing=decreasing)
+                                   tracks <<- tracks[sorted$ix]
+                              },
+                              getMatrix = function(slot='vx')
+                              {
+                                   #' Get a matrix of the tracklist data. Track id's are rows while 
+                                   #' frame numbers are columns. Use the matrix form of TrackList to do 
+                                   #' bulk operations such as determining the sse of all the data to a 
+                                   #' single curve.
+                                   frames <- (1:base::length(tAll))-1
+                                   ids <- names(tracks)
+                                   data <- matrix(NA, base::length(ids), base::length(frames), dimnames=list(id=names(tracks), frame=as.character(frames)))
+                                   print(base::length(ids))
+                                   print(base::length(frames))
+                                   for(track in tracks)
+                                   {
+                                        data[as.character(track$id), (track$points$frame + 1)] <- track$points[,slot]
+                                   }
+                                   return(data)
+                              }                              
                          )
 ) 
 
@@ -317,8 +410,13 @@ TrackList <- setRefClass('TrackList',
 Track <- setRefClass('Track',
                      fields = list(id='numeric', points='data.frame', positionFit='list', velocityFit='list', validFrames='numeric', .parent='TrackList'),
                      methods = list(
-                          trackFromTrackROI = function(id, start, pattern)
+                          initializeWithTrackROI = function(id, start, pattern, tAll)
                           {
+                               "
+                               #' Using the value in the 'PolygonPts' value and the 'PatternPts'
+                               #' value from a JEX ROI that represents a track, create an R 'Track'
+                               #' object. Assign the track the id given as 'id'.
+                               "
                                pairs <- strsplit(pattern,';')[[1]]
                                x <- numeric(0)
                                x0 <- numeric(0)
@@ -347,18 +445,29 @@ Track <- setRefClass('Track',
                                          frames <- append(frames,as.numeric(nums[3]))
                                          # print(nums)
                                     }
-                               }
-                               calculateVelocities()
-                               
+                               }                               
                                id <<- as.numeric(as.character(id))
-                               points <<- data.frame(frame=frames, x=x, y=y, vx=vx, vy=vy)
+                               if(base::length(frames) > base::length(tAll))
+                               {
+                                    stop(cat("Length of tAll seems to short for the data that is being used to initialize the track. frames length = ", base::length(frames), " tAll length = ", base::length(tAll)))
+                               }
+                               points <<- data.frame(frame=frames, x=x, y=y, t=tAll[frames+1])
+                               calculateVelocities()
                           },
                           length = function()
                           {
+                               "
+                               #' Return the number of frames in this track.
+                               "
                                return(nrow(points))
                           },
                           getSlot = function(slot, rel=FALSE, validOnly=FALSE)
                           {
+                               "
+                               #' Get a vector of the values indicated by 'slot' for this point.
+                               #' This accessor method is useful because the data is stored within
+                               #' a data.frame field called points. 
+                               "
                                if(rel)
                                {
                                     temp <- points[,slot] - mean(points[,slot])
@@ -379,16 +488,46 @@ Track <- setRefClass('Track',
                           },
                           range = function(slot, rel=FALSE)
                           {
+                               "
+                               #' For the indicated 'slot' (i.e., column within the points field),
+                               #' return the range that this value takes.
+                               "
                                ret <- base::range(getSlot(slot, rel=rel))
                                return(ret)
                           },
                           calculateVelocities = function()
                           {
+                               "
+                               #' Internally populate/update the values 'vx' and 'vy' within
+                               #' the points vield using 'getDerivative(x, y)'
+                               "
                                points$vx <<- getDerivative(points$x, points$t)
                                points$vy <<- getDerivative(points$y, points$t)
                           },
+                          smoothVelocities = function(widths)
+                          {
+                               points$vxs <<- sapply(seq_along(points$frame), 
+                                                     getAverage,
+                                                     frames=points$frame,
+                                                     widths=widths,
+                                                     data=points$vx
+                               )
+                               points$vys <<- sapply(seq_along(points$frame), 
+                                                     getAverage,
+                                                     frames=points$frame,
+                                                     widths=widths,
+                                                     data=points$vy
+                               )
+                          },
                           plotTrack = function(slotX='t', slotY='x', relX=FALSE, relY=TRUE, add=FALSE, withTitle=TRUE, col='black', lwd=1, lty=1, xlab=slotX, ylab=slotY, ...)
                           {
+                               "
+                               #' Plot the track using 'slotX' as the x variable and
+                               #' 'slotY' as the y variable, using 'relX' and 'relY'
+                               #' to indicate whether to plot the value 'relative' to
+                               #' its mean value. Additional args are passed to the 
+                               #' 'plot' method that is used internally.
+                               "
                                xData <- getSlot(slotX, relX)
                                yData <- getSlot(slotY, relY)
                                if(relX)
@@ -425,10 +564,24 @@ Track <- setRefClass('Track',
                           },
                           addPoint = function(x, y, t, frame)
                           {
-                               points <<- rbind(points, data.frame(frame=frame, t=t, x=x, y=y))
+                               "
+                               #' Add a point to the 'points' field of this track. It is
+                               #' assumed you are adding things in an appropriate order.
+                               #' Typically the points are listed in order of frame.
+                               "
+                               points <<- rbind(points, data.frame(x=x, y=y, t=t, frame=frame))
                           },
                           show = function()
                           {
+                               "
+                               #' Prints the information of this object to the command line
+                               #' output. This overrides the basic 'show' method as a track
+                               #' carries a reference to its parent trackList (if it has been
+                               #' added to a trackList using the 'setTrack' method) which
+                               #' results in recursive printing of TrackList information
+                               #' because a 'show' for 'TrackList' calls 'show' on each 'Track'.
+                               #' This method eliminates this issue. 
+                               "
                                cat("Reference class object of class 'Track'\n")
                                for(name in names(Track$fields()))
                                {
@@ -444,24 +597,443 @@ Track <- setRefClass('Track',
                                     }
                                }
                                cat("\n")
+                          },
+                          setTrackValidFrames = function(track, inflectionPtsToFilter=c(1,3), applyWobbleFilter=TRUE, wobbleStart=0.25, wobbleEnd=0.99)
+                          {
+                               "
+                               #' Takes the track and determines which points are adjacent to the types of points listed in 
+                               #' the 'inflectionPtsToFilter' vector of integers and removes them. This filter is good for
+                               #' removing inaccurate values of the velocity when using a triangle waveform because the estimate
+                               #' of velocity will be artificially be lower due to sample aliasing of particle motion.
+                               #' Possible values are 0, 1, 2, and 3 for inflectionPtsToFilter. Multiple at once can be provided.
+                               #' 0 Represents the upward zero-crossing of the position and max positive velocity
+                               #' 1 Represents the max position and downward zero-crossing of the velocity
+                               #' 2 Represents the downward zero-crossing of the position and min (i.e most negative) velocity
+                               #' 4 Represents the min (i.e., most negative) position and upward zero-crossing of the velocity
+                               "
+                               
+                               sweep <- track$getTrackSweep()
+                               indicesToRemove <- c()
+                               inflectionsToAddress <- sweep$inflectionNums %in% inflectionPtsToFilter # These are times at which flow switches directions
+                               for(i in which(inflectionsToAddress))
+                               {
+                                    nearests <- getNearests(sweep$t, sweep$inflections[i])
+                                    if(!is.na(nearests)[1])
+                                    {
+                                         indicesToRemove <- c(indicesToRemove, nearests)
+                                    }
+                               }
+                               #print(indicesToRemove)
+                               validTimeIndices <- c(1:length(track$points$t))[-indicesToRemove]
+                               
+                               
+                               ### Account for the "wobble" of cells when flow switches directions
+                               if(applyWobbleFilter)
+                               {
+                                    otherValidTimes <- numeric(0) # This 
+                                    for(tIndex in 1:length(track$points$t))
+                                    {
+                                         #browser()
+                                         #print(paste('tIndex:',tIndex))
+                                         infIndex <- which((sweep$inflections >= track$points$t[tIndex]) & inflectionsToAddress)[1]
+                                         #print(paste('t2Index:',t2Index))
+                                         if(is.na(infIndex)) next
+                                         infT2 <- sweep$inflections[infIndex]
+                                         infT1 <- sweep$inflections[infIndex-2]
+                                         dInfT <- infT2-infT1
+                                         if( (track$points$t[tIndex] >= (infT1 + wobbleStart*dInfT)) & (track$points$t[tIndex] <= (infT1 + wobbleEnd*dInfT)) )
+                                         {
+                                              otherValidTimes <- c(otherValidTimes, tIndex)
+                                         }
+                                         #browser()
+                                    }
+                               }
+                               if(applyWobbleFilter)
+                               {
+                                    #browser()
+                                    validTimeIndices <- sort(intersect(validTimeIndices, otherValidTimes))
+                               }
+                               track$validFrames <- track$frames[validTimeIndices]
+                               return(track)
+                          },
+                          getTrackSweep = function(amplitude=1, offset=mean(getSlot(slot='x')), validFramesOnly=FALSE, guess=NULL)
+                          {
+                               "
+                               #' This method is provided as a convenience. It calls 'getSweep' using
+                               #' parameters that exist within the 'Track' and parent 'TrackList'
+                               #' when available or the 'getSweep' defualts.
+                               "
+                               if(validFramesOnly)
+                               {
+                                    frames <- validFrames
+                               }
+                               else
+                               {
+                                    frames <- points$frame
+                               }
+                               args <- list(sin=.parent$sin, fi=.parent$fi, ff=.parent$ff, tAll=.parent$tAll, phaseShift=.parent$phaseShift, amplitude=amplitude, offset=offset, frames=frames, guess=guess)
+                               args <- args[!isempty(args)]
+                               return(do.call(getSweep, args))
+                          },
+                          sseTrack = function(amplitude=50, phaseShift=0, offset=0, validFramesOnly=FALSE)
+                          {
+                               "
+                               #' Calculates the sum square error (i.e., sse) between this track
+                               #' and a sweep funciton with the given 'amplitude', 'phaseShift',
+                               #' and 'offset'. The parameter 'validFramesOnly' will limit the
+                               #' calculation to just the 'validFrames' listed in this Track.
+                               #' The parameter of 'sin' = T/F, and tAll, fi, and ff are passed
+                               #' from the track's parent 'TrackList'.
+                               "
+                               if(validFramesOnly)
+                               {
+                                    frames <- validFrames
+                               }
+                               else
+                               {
+                                    frames <- points$frame
+                               }
+                               args <- list(sin=.parent$sin, fi=.parent$fi, ff=.parent$ff, tAll=.parent$tAll, amplitude=amplitude, offset=offset, frames=frames)
+                               args <- args[!isempty(args)]
+                               predicted <- do.call(getSweep, args)
+                               data <- object$points$vx                ### Explicitly fitting vx ###
+                               indicesToGet <- which(points$frame %in% frames)
+                               result <- sum((data[indicesToGet]-predicted$v)^2)
+                               return(result)
                           }
                      )
 )
 
+##### General #####
+
+first <- function(x)
+{
+     return(x[1])
+}
+
+last <- function(x)
+{
+     return(x[numel(x)])
+}
+
+getDerivative <- function(x, t)
+{
+     v <- numeric(0)
+     for(i in 1:length(x))
+     {
+          v <- c(v, localDerivative(x, t, i))
+     }
+     return(v)
+}
+
+localDerivative <- function(x, t, i)
+{
+     if(i == 1)
+     {
+          #return((x[i+1]-x[i])/(t[i+1]-t[i]))
+          return(interpolateDerivative(x[i], x[i+1], x[i+2], t[i], t[i+1], t[i+2], t[i]))
+     }
+     else if(i == length(x))
+     {
+          #return((x[i]-x[i-1])/(t[i]-t[i-1]))
+          return(interpolateDerivative(x[i-2], x[i-1], x[i], t[i-2], t[i-1], t[i], t[i]))
+     }
+     else
+     {
+          return(interpolateDerivative(x[i-1], x[i], x[i+1], t[i-1], t[i], t[i+1], t[i]))
+     }
+}
+
+interpolateDerivative <- function(f0, f1, f2, x0, x1, x2, xj)
+{
+     # This is a three point interpolation of the derivative where the interpolated point
+     # is the middle of the 3 points. This simplifies to the the three-point midpoint formula
+     # when the time steps are equal but can handle when timesteps are unequal (i.e., the 
+     # time-step on either side of the 3 points is not equal)
+     term1 <- f0*((2*xj-x1-x2)/((x0-x1)*(x0-x2)))
+     term2 <- f1*((2*xj-x0-x2)/((x1-x0)*(x1-x2)))
+     term3 <- f2*((2*xj-x0-x1)/((x2-x0)*(x2-x1)))
+     return(term1 + term2 + term3)
+}
+
+getWindowWidths <- function(fit, trackList, dist, maxWidth)
+{
+     dt <- trackList$tAll[2]-trackList$tAll[1]
+     v <- 4*fit$par[['amplitude']]*(trackList$fi*(trackList$ff/trackList$fi)^(trackList$tAll/last(trackList$tAll)))
+     widths <- ceiling(dist/(v*dt))
+     widths[widths > maxWidth] <- maxWidth
+     return(widths)
+}
+
+#' 'x' is the index within 'frames' for which we will perform the calculation
+#' 'frames' are the frames in this track
+#' 'widths' are the velocity dependent widths of the averaging window and has the same length as 'tAll'
+#' 'data' is the vector of data for which we will calculate the windowed averages
+getAverage <- function(x, frames, widths, data)
+{
+     # Subtract 1 to represent the number of intervals instead of number of points to average
+     width <- widths[frames[x]+1] - 1
+     newX <- x - floor(width/2)
+     if(newX < 1)
+     {
+          newX <- 1
+     }
+     if((newX+width) > length(frames))
+     {
+          width <- length(frames)-newX
+     }
+     mean(data[newX:(newX+width)])
+}
+
+##### Track Filtering #####
+
+#' Returns true if the track length within the indicated length bounds.
+trackLengthFilter <- function(track, min=0, max=1000000)
+{
+     l <- track$length()
+     if(l >= min & l <=max)
+     {
+          return(TRUE)
+     }
+     else
+     {
+          return(FALSE)
+     }
+}
+
+#' Returns true if the track is defined within the indicated frame bounds.
+trackFrameFilter <- function(track, startMin=0, startMax=1000000, endMin=0, endMax=1000000)
+{
+     startFrame <- first(track$points$frame)
+     endFrame <- last(track$points$frame)
+     
+     if(startFrame >= startMin & startFrame <= startMax & endFrame >= endMin & endFrame <= endMax)
+     {
+          return(TRUE)
+     }
+     else
+     {
+          return(FALSE)
+     }
+}
+
+##### Fitting #####
+
+
+getSweep = function(amplitude=1, phaseShift=0, offset=0, sin=FALSE, fi=2, ff=0.1, tAll=seq(0,500,1), frames=-1, guess=NULL)
+{
+     if(frames[1] < 0 | max(frames) > (length(tAll)-1))
+     {
+          frames <- (1:length(tAll)) - 1 #Subtract 1 to be consistent with frames from JEX, which start at 0 instead of 1
+     }
+     t <- tAll[frames + 1]
+     ti <- first(t)
+     tf <- last(t)
+     N <- log(ff/fi)/log(2)
+     R <- N / (tf-ti)
+     
+     if(is.null(guess))
+     {
+          A <- amplitude
+          phi <- phaseShift
+          b <- offset
+     }
+     else
+     {
+          A <- guess['amplitude']
+          phi <- guess['phaseShift']
+          b <- guess['offset']
+     }
+     
+     ### Create "saw-tooth" version ###
+     # line essentially means position. With a triangular waveform, the velocity equals 4*A*f(t) because in a single cycle, the position of a particle travels a total distance of 4*A.
+     # If we integrate the velocity, we get the position (i.e., line), we shift this line by a phase shift described below.
+     # Whenever the position travels a distance of A, we have essentially passed through pi/2 of a cycle.
+     # So we do mod division of the position by A to determine the zero crossings and peaks of the triangular wave
+     f <- fi*(ff/fi)^(tAll/tf)
+     if(ff==fi)
+     {
+          line <- 4*A*f*tAll - A*(phi/(pi/2)) # the last term shifts the line up and down, essentially dictating where the "sections" of the line are placed (i.e., the initial phase of the triangle wave)
+          line1 <- 4*1*f*tAll - 1*(phi/(pi/2)) # WITH DUMMY AMPLITUDE OF 1 in case A is 0 then we have something to calculate sections with that isn't a simple flat line
+     }
+     else
+     {
+          line <- 4*A*fi*(  ((ff/fi)^(tAll/tf)*tf)/log(ff/fi)-tf/log(ff/fi)  ) - A*(phi/(pi/2)) # the last term shifts the line up and down, essentially dictating where the "sections" of the line are placed (i.e., the initial phase of the triangle wave)
+          line1 <- 4*1*fi*(  ((ff/fi)^(tAll/tf)*tf)/log(ff/fi)-tf/log(ff/fi)  ) - 1*(phi/(pi/2)) # WITH DUMMY AMPLITUDE OF 1 in case A is 0 then we have something to calculate sections with that isn't a simple flat line
+     }
+     
+     if(A == 0)
+     {
+          x <- b + line # Flatline
+     }
+     else
+     {
+          x <- b + (line %% A) #*sign(fSweep$x)
+     }
+     # Fix each pi/2 section of x
+     sections <- (line1 %/% 1) %% 4
+     x[sections==1] <- -1*(x[sections==1]-A)
+     x[sections==2] <- -1*(x[sections==2])
+     x[sections==3] <- (x[sections==3]-A)
+     
+     # Find pi/2 intervals on frequency sweep
+     
+     offsetInflections <- (  (-1*(phi/(pi/2))) %/% 1  ) 
+     ni <- seq(1,1000,1) + offsetInflections
+     suppressWarnings(inflections <- (log((log(ff/fi)*phi)/(2*fi*pi*tf)+(log(ff/fi)*ni)/(4*fi*tf)+1)*tf)/log(ff/fi))
+     inflections <- inflections[!is.nan(inflections)]
+     inflectionNums <- (  seq(0,length(inflections)-1,1) + (  offsetInflections %% 4  )  ) %% 4
+     startTimeI <- which(inflections >= t[1])[1]
+     endTimeI <- which(inflections <= t[length(t)])
+     endTimeI <- endTimeI[length(endTimeI)]
+     if(is.na(endTimeI))
+     {
+          stop(paste(t[length(t)], "is greater than last time of last inflection point. Therefore, there must be an error in fi/ff or tAll as there are inflections guaranteed in during times ti to tf given fi and ff."))
+     }
+     inflections <- inflections[startTimeI:endTimeI]
+     inflectionNums <- inflectionNums[startTimeI:endTimeI]
+     
+     predicted <- A*sin(2*pi*((fi*(-1+2^(R*tAll)))/(R*log(2))) - phi) + b
+     
+     #browser()
+     #print((-A*(phi/(pi/2))) %/%A %% 4)
+     if(sin)
+     {
+          v=getDerivative(x=predicted, t=tAll)[frames+1]
+          return(list(A=A, t=t, x=predicted[frames+1], line=line, v=v, sections=sections, inflections=inflections, inflectionNums=inflectionNums))
+     }
+     else
+     {
+          v=getDerivative(x=x, t=tAll)[frames+1]
+          return(list(A=A, t=t, x=x[frames+1], line=line, v=v, sections=sections, inflections=inflections, inflectionNums=inflectionNums))
+     }
+}
+
+getNearests = function(t, inflectionPoint)
+{
+     diff <- t-inflectionPoint
+     upper <- which(diff >= 0)[1]
+     if(is.na(upper) || upper == 1)
+     {
+          return(NA)
+     }
+     lower <- upper - 1
+     return(c(lower, upper))
+}
+
+getTrackFitFixedPhase <- function(track, slot='vx', initialAmplitude=40, amplitudeLimits=c(0,500), phaseShift=0, initialOffset=0, offsetLimits=c(0, 10000), guess=NULL)
+{
+     if(is.null(guess))
+     {
+          bestFit <- optim(par=c(amplitude=initialAmplitude, offset=initialOffset), 
+                           function(par, slot, phaseShift){track$sseTrack(slot=slot, amplitude=par['amplitude'], phaseShift=phaseShift, offset=par['offset'])}, 
+                           method='L-BFGS-B', 
+                           lower=c(min(amplitudeLimits), min(offsetLimits)), 
+                           upper=c(max(amplitudeLimits), max(offsetLimits)), 
+                           control=list(trace=0),
+                           slot=slot,
+                           phaseShift=phaseShift)
+     }else
+     {
+          bestFit <- optim(par=c(amplitude=as.numeric(guess['amplitude']), offset=as.numeric(guess['offset'])), 
+                           function(par, slot, phaseShift){track$sseTrack(slot=slot, amplitude=par['amplitude'], phaseShift=phaseShift, offset=par['offset'])}, 
+                           method='L-BFGS-B', 
+                           lower=c(min(amplitudeLimits), min(offsetLimits)), 
+                           upper=c(max(amplitudeLimits), max(offsetLimits)), 
+                           control=list(trace=0),
+                           slot=slot,
+                           phaseShift=phaseShift)
+     } 
+     return(list(par=c(phaseShift=as.numeric(phaseShift), amplitude=as.numeric(bestFit$par['amplitude']), offset=as.numeric(bestFit$par['offset'])), fit=bestFit))
+}
+
+sseBulk <- function(trackList, trackMatrix, amplitude=50, phaseShift=0)
+{
+     # Cols are frames, rows are track ids
+     # we pass the 'trackMatrix' so we don't have to obtain it each iteration
+     
+     # get the sweep (for this we need the 'trackList')
+     sweep <- getSweep(amplitude=amplitude, phaseShift=phaseShift, offset=0, sin=trackList$sin, fi=trackList$fi, ff=trackList$ff, tAll=trackList$tAll, frames=-1, guess=NULL)
+     
+     # For each index in tAll (i.e., for each frame)
+     sse <- sum((t(trackMatrix)-sweep$v)^2, na.rm=TRUE) # Do the transpose because the subtract function typically makes the subtracted vector vertical
+     cat("(", amplitude, ",", phaseShift, ") = ", sse, "\n", sep="")
+     return(sse)
+}
+
+getBulkPhaseShift <- function(trackList)
+{
+     trackMatrix <- trackList$getMatrix()
+     #      aTrack <- trackList$getTrack(0)
+     #      print(aTrack)
+     #      r <- aTrack$range('x', rel=TRUE)
+     #      r <- (r[2]-r[1])/2
+     #      print(r)
+     amplitude <- max(as.numeric(trackList$getProp(fun=function(x){r <- x$range('x', rel=TRUE); r <- (r[2]-r[1])/2; return(r)})))
+     print("AMPLITUDE")
+     print(amplitude)
+     guess <- c(amplitude=amplitude, phaseShift=0)
+     amplitudeLimits=c(0.5, 10*amplitude)
+     phaseShiftLimits=c(-pi, pi)
+     offsetLimits=c(0,10000)
+     bestFit <- optim(par=guess, 
+                      function(par, trackList, trackMatrix){sseBulk(trackList=trackList, trackMatrix=trackMatrix, amplitude=par['amplitude'], phaseShift=par['phaseShift'])}, 
+                      method='L-BFGS-B', 
+                      lower=c(min(amplitudeLimits), min(phaseShiftLimits)), 
+                      upper=c(max(amplitudeLimits), max(phaseShiftLimits)), 
+                      control=list(trace=0),
+                      trackList=trackList,
+                      trackMatrix=trackMatrix)
+     return(list(par=c(phaseShift=as.numeric(bestFit$par['phaseShift']), amplitude=as.numeric(bestFit$par['amplitude']), offset=as.numeric(bestFit$par['offset'])), fit=bestFit))
+}
+
+# With these fits, what should we do with respect to frames?
+# Also, should we do the initial determination of the phase shift using bulk data and single curve?
+getTrackFitAmplitudeOnly <- function(track, slot='vx', initialAmplitude=40, amplitudeLimits=c(0,500), phaseShift=0, offset=0, frames=-1, guess=FALSE)
+{
+     if(frames[1] < 0)
+     {
+          frames <- track$points$frame
+     }
+     if(guess[1]==TRUE)
+     {
+          initialAmplitude <- getTrackParamGuess(object)['amplitude']
+     }
+     
+     ### Out this into calc of bestFit so we can specify frames
+     #sse(sin=object@sin, phaseShift=phaseShift, amplitude=amplitude, offset=offset, fi=object@fi, ff=object@ff, ti=object@ti, tf=object@tf, samplingFreq=object@samplingFreq, data=slot(object, slot), indices=indices)
+     
+     bestFit <- optim(par=c(amplitude=as.numeric(initialAmplitude)), 
+                      function(par, object, slot, phaseShift, offset, indices){sseTrack(object=object, slot=slot, phaseShift=phaseShift, amplitude=par['amplitude'], offset=offset, frames=frames)}, 
+                      method='L-BFGS-B', 
+                      lower=c(min(amplitudeLimits)), 
+                      upper=c(max(amplitudeLimits)), 
+                      control=list(trace=0), 
+                      object=object,
+                      slot=slot,
+                      phaseShift=phaseShift,
+                      offset=offset,
+                      frames=frames)
+     return(bestFit)
+}
 
 ##### Testing 1 #####
 
 # maxima1 <- new('Maxima')
 # maxima2 <- maxima1$copy()
-# maxima1$initializeWithROI(frame=0, polygon='1,1,1;2,2,2;3,3,3;4,4,4;5,5,5')
-# maxima2$initializeWithROI(frame=1, polygon='1,2,5;2,3,4;3,4,3;4,5,2;500,600,1')
+# maxima3 <- maxima1$copy()
+# maxima1$initializeWithROI(frame=0, polygon='1,1,1;2,2,2;3,3,3;4,4,4;51,61,5')
+# maxima2$initializeWithROI(frame=1, polygon='2,1,5;3,2,4;4,3,3;5,4,2;50,60,1')
+# maxima3$initializeWithROI(frame=2, polygon='1,1,1;2,2,2;3,3,3;4,4,4;5,5,5')
 # 
 # maximaList <- new('MaximaList')
 # maximaList$setMaxima(maxima1)
 # maximaList$setMaxima(maxima2)
-# maximaList$trackBack(startFrame=1)
+# maximaList$setMaxima(maxima3)
+# maximaList$trackBack(startFrame=2, endFrame=0)
 # 
 # trackList <- maximaList$getTrackList(sin=FALSE, fi=2, ff=0.1, tAll=0:1)
+# maximaList$generateMaximaPlots(path='~/Documents/MMB/Projects/Adhesion/R/Testing/Plots1')
 
 ##### Testing 2 #####
 
@@ -471,29 +1043,102 @@ Track <- setRefClass('Track',
 # mListCopy$trackBack(startFrame=501)
 # # trackList <- mListCopy$getTrackList(sin=FALSE, fi=2, ff=0.1, tAll=0:515)
 
-##### Testing 3 #####
+# ##### Testing 3 #####
 # 50 ms exposure. 2361 images in 500 s = 4.722 frames / sec
 path3 <- '/Volumes/BeebeBig/Jay/JEX Databases/Adhesion FACS/RPMI P-Sel 5Hz-100mHz/Cell_x0_y0/Roi-Tracks Roi/x0_y0.jxd'
 path4 <- '/Volumes/BeebeBig/Jay/JEX Databases/Adhesion FACS/RPMI P-Sel 5Hz-100mHz/Cell_x0_y0/Roi-Maxima/x0_y0.jxd'
-maximaList <- new('MaximaList')
-maximaList$initializeWithFile(path=path4)
+path5 <- '~/Documents/MMB/Projects/Adhesion/R/Testing/SparseMaxima.txt'
+if(!('maximaList' %in% ls()))
+{
+     maximaList <- new('MaximaList')
+     maximaList$initializeWithFile(path=path5)
+} else
+{
+     maximaList <- MaximaList$new(maximaList)
+}
 mListCopy <- maximaList$copy()
-mListCopy$trackBack(startFrame=2360, endFrame=2340)
-mListCopy <- MaximaList$new(mListCopy)
-mListCopy$trackBackEnd <- 2340
-trackList <- mListCopy$getTrackList(sin=TRUE, fi=5, ff=0.1, tAll=seq(0,500,length.out=2361))
-track <- trackList$getTrack(1)
-track$plotTrack()
+
+# Slow motion is hard for directionality because cutoff is determined based on max movement (all of which are small!)
+
+mListCopy$trackBack(startFrame=9994, endFrame=9400, maxDist=150, direction=c(1,0,0), directionality=10, uniformityDistThresh=3, digits=1)
+mListCopy$generateMaximaPlots(path='~/Documents/MMB/Projects/Adhesion/R/Testing/Plots1')
+trackList <- mListCopy$getTrackList(sin=FALSE, fi=2, ff=0.01, tAll=seq(0,500,length.out=maximaList$length()))
+trackList$filterTracks(fun = trackLengthFilter, min=50, max=1000000)
+# trackList$filterTracks(fun = trackFrameFilter, startMin=0, startMax=1000000, endMin=maximaList$length()-1, endMax=1000000)
 trackList$plotTrackList()
+bestFit <- getBulkPhaseShift(trackList)
+duh <- getSweep(amplitude=bestFit$par['amplitude'], phaseShift=bestFit$par['phaseShift'], offset=0, sin=trackList$sin, fi=trackList$fi, ff=trackList$ff, tAll=trackList$tAll, frames=-1, guess=NULL)
+lines(duh$t, duh$v, col='blue')
+# aTrack <- trackList$getTrack(0)
+# widths <- getWindowWidths(fit=bestFit, trackList=trackList, dist=10, maxWidth=1000)
+# aTrack$smoothVelocities(widths)
+
+trackList$smoothVelocities(fit=bestFit, dist=10, maxWidth=1000)
+trackList$plotTrackList(slot='vxs')
+lines(duh$t, duh$v, col='blue')
+
+# plot(aTrack$points$t, aTrack$points$vx, type='l', col='black')
+# lines(aTrack$points$t, aTrack$points$vxs, col='red')
+# lines(duh$t, duh$v, col='blue')
+
+# newVX <- sapply(seq_along(aTrack$points$frame), 
+#                 function(x,frames,vx,v,dist,tStep,maxdf)
+#                 {
+#                      df <- ceiling(dist/(abs(v[x])*tStep))
+#                      #                      print(x)
+#                      #                      print(dist)
+#                      #                      print(v)
+#                      #                      print(v[x])
+#                      #                      print(abs(v[x]))
+#                      #                      print(tStep)
+#                      #                      print(x+df)
+#                      if(df > maxdf)
+#                      {
+#                           df <- maxdf
+#                      }
+#                      if((x+df) > length(vx))
+#                      {
+#                           df <- length(vx)-x
+#                      }
+#                      x <- x - round(df/2)
+#                      if(x < 1)
+#                      {
+#                           x <- 1
+#                      }
+#                      #                      print(df)
+#                      mean(vx[x:(x+df)])
+#                 },
+#                 frames=aTrack$points$frame,
+#                 vx=aTrack$points$vx,
+#                 v=duh$v[aTrack$points$frame + 1],
+#                 dist=25,
+#                 tStep=0.05,
+#                 maxdf=10
+# )
 
 
-# trackListImport <- trackListFromFile(file=path3, sin=TRUE, fi=1, ff=0.1, t=seq(0, 515, 1))
-# trackList <- filterTrackList(trackListImport, trackLengthFilter, min=10)
-# trackList <- filterTrackList(trackList, trackFrameFilter, endMin=length(trackList@tAll)-1)
-# trackList <- sortTrackList(trackList)
-# plot(trackList, slot='vx')
-# trackList <- setTrackListPhaseShift(object=trackList)
-# aTrack <- getTrack(trackList, 2319)
-# plot(aTrack, slotY='vx', relY=FALSE)
-# plotFit(aTrack, xlab='Time [s]', ylab='Velocity [pixel/s]')
-# trackListF <- filterTrackList(trackList, trackLengthFilter, min=4)
+# lines(aTrack$points$t, aTrack$points$vx)
+
+##### Testing Sweep #####
+# duh <- getSweep(amplitude=100, phaseShift=0, offset=0, sin=FALSE, fi=2, ff=0.01, tAll=seq(0,500,length.out=10001), frames=-1, guess=NULL)
+# plot(duh$t, duh$x, col='red', type='l', xlim=c(230, 250))
+
+# ##### Testing 4 #####
+# 
+# path3 <- '/Volumes/BeebeBig/Jay/JEX Databases/Adhesion FACS/RPMI P-Sel 5Hz-100mHz/Cell_x0_y0/Roi-Tracks Roi/x0_y0.jxd'
+# trackList <- new('TrackList')
+# trackList$initializeWithFile(file=path3, sin=TRUE, fi=5, ff=0.1, tAll=seq(0,500,length.out=2361))
+# trackList$filterTracks(fun = trackLengthFilter, min=50, max=1000000)
+# trackList$filterTracks(fun = trackFrameFilter, startMin=0, startMax=1000000, endMin=2360, endMax=1000000)
+# bestFit <- getBulkPhaseShift(trackList)
+# 
+# ##### Testing 5 #####
+# 
+# path <- "/Volumes/BeebeBig/Jay/JEX Databases/Adhesion FACS/Test/Cell_x0_y0/Roi-Tracks Roi/x0_y0.jxd"
+# path2 <- '/Users/jaywarrick/Documents/JEX/Raw Data/LNCaP.arff'
+# path3 <- '/Users/jaywarrick/Documents/JEX/LocalTest/PC3 vs LNCaP/Cell_x0_y0/Roi-Tracks Upper/x0_y0.jxd'
+# trackList <- new('TrackList')
+# trackList$initializeWithFile(file=path3, sin=TRUE, fi=1, ff=0.1, tAll=seq(0, 515, 1))
+# trackList$filterTracks(fun = trackLengthFilter, min=50, max=1000000)
+# trackList$filterTracks(fun = trackFrameFilter, startMin=0, startMax=1000000, endMin=515, endMax=1000000)
+# bestFit <- getBulkPhaseShift(trackList)
