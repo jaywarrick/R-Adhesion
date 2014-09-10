@@ -73,7 +73,7 @@ normalize <- function(data, abs=FALSE)
 
 trackLengthFilter <- function(track, min=0, max=1000000)
 {
-     l <- length(track)
+     l <- track$length
      if(l >= min & l <=max)
      {
           return(TRUE)
@@ -87,8 +87,8 @@ trackLengthFilter <- function(track, min=0, max=1000000)
 trackFrameFilter <- function(track, startMin=0, startMax=1000000, endMin=0, endMax=1000000)
 {
      # All start and end points are inclusive
-     startFrame <- first(track@frames)
-     endFrame <- last(track@frames)
+     startFrame <- first(track$frames)
+     endFrame <- last(track$frames)
      
      if(startFrame >= startMin & startFrame <= startMax & endFrame >= endMin & endFrame <= endMax)
      {
@@ -102,33 +102,33 @@ trackFrameFilter <- function(track, startMin=0, startMax=1000000, endMin=0, endM
 
 filterTrackList <- function(trackList, filterFunction, ...)
 {
-     trackList@tracks <- Filter(function(x){filterFunction(x,...)}, trackList@tracks)
+     trackList$tracks <- Filter(function(x){filterFunction(x,...)}, trackList$tracks)
      return(trackList)
 }
 
-sortTrackList <- function(object, trackPropFun=function(object){return(length(object@frames))}, decreasing = TRUE) 
+getSortedTrackList <- function(object, fun=function(object){return(length(object$frames))}, decreasing = TRUE) 
 {
-     ret <- getProp(object, trackPropFun=trackPropFun)
+     ret <- object$getProp(fun=fun)
      sorted <- sort(unlist(ret), index.return=T, decreasing=decreasing)
-     newTracks <- object@tracks[sorted$ix]
-     object@tracks <- newTracks
+     newTracks <- object$tracks[sorted$ix]
+     object$tracks <- newTracks
      return(object)
 }
 
-applyTrackList <- function(object, trackFun=function(track){return(calculateVelocities(track))}) 
-{
-     objectret <- getProp(object, trackPropFun=trackPropFun)
-     sorted <- sort(unlist(ret), index.return=T, decreasing=decreasing)
-     newTracks <- object@tracks[sorted$ix]
-     object@tracks <- newTracks
-     return(object)
-}
+# applyTrackList <- function(object, fun=function(track){return(track$calculateVelocities())}) 
+# {
+#      objectret <- getProp(object, fun=fun)
+#      sorted <- sort(unlist(ret), index.return=T, decreasing=decreasing)
+#      newTracks <- object$tracks[sorted$ix]
+#      object$tracks <- newTracks
+#      return(object)
+# }
 
-setTrackListValidTimeIndices <- function(trackList, inflectionPtsToFilter=c(1,3), applyWobbleFilter=TRUE, wobbleStart=0.25, wobbleEnd=0.99)
+setTrackListValidFrames <- function(trackList, inflectionPtsToFilter=c(1,3), applyWobbleFilter=TRUE, wobbleStart=0.25, wobbleEnd=0.99)
 {
-     for(i in 1:length(trackList@tracks))
+     for(i in 1:length(trackList$tracks))
      {
-          trackList@tracks[[i]] <- setTrackValidTimeIndices(trackList@tracks[[i]], inflectionPtsToFilter=c(1,3), applyWobbleFilter=applyWobbleFilter, wobbleStart=wobbleStart, wobbleEnd=wobbleEnd)
+          trackList$tracks[[i]] <- setTrackValidFrames(trackList$tracks[[i]], inflectionPtsToFilter=c(1,3), applyWobbleFilter=applyWobbleFilter, wobbleStart=wobbleStart, wobbleEnd=wobbleEnd)
      }
      return(trackList)
 }
@@ -145,7 +145,7 @@ getNearests <- function(t, inflectionPoint)
      return(c(lower, upper))
 }
 
-setTrackValidTimeIndices <- function(track, inflectionPtsToFilter=c(1,3), applyWobbleFilter=TRUE, wobbleStart=0.25, wobbleEnd=0.99)
+setTrackValidFrames <- function(track, inflectionPtsToFilter=c(1,3), applyWobbleFilter=TRUE, wobbleStart=0.25, wobbleEnd=0.99)
 {
      #' Takes the track and determines which points are adjacent to the types of points listed in 
      #' the 'inflectionPtsToFilter' vector of integers and removes them. This filter is good for
@@ -613,17 +613,11 @@ sseTrack <- function(object, slot='vx', amplitude=50, phaseShift=0, offset=0, fr
      {
           frames <- slot(object, 'frames')
      }
-     predicted <- getSweep(sin=object@parent@sin, phaseShift=phaseShift, amplitude=amplitude, offset=offset, fi=object@parent@fi, ff=object@parent@ff, tAll=object@parent@tAll, frames=object@frames)
-     data <- slot(object, slot)
-     indicesToGet <- which(object@frames == frames)
+     predicted <- getSweep(sin=object$.parent$sin, phaseShift=phaseShift, amplitude=amplitude, offset=offset, fi=object$.parent$fi, ff=object$.parent$ff, tAll=object$.parent$tAll, frames=object$frames)
+     data <- object$getSlot(slot=slot)
+     indicesToGet <- which(object$frames == frames)
      result <- sum((data[indicesToGet]-predicted$v)^2)
-     #print(paste(result,first(frames), ' to ', last(frames)))
-     if(is.na(result))
-     {
-          browser()
-     }
      return(result)
-     #sse(sin=object@sin, phaseShift=phaseShift, amplitude=amplitude, offset=offset, fi=object@fi, ff=object@ff, ti=object@ti, tf=object@tf, samplingFreq=object@samplingFreq, data=slot(object, slot), indices=indices)
 }
 
 getTrackFitFixedPhase <- function(object, slot='vx', initialAmplitude=40, amplitudeLimits=c(0,500), phaseShift=0, initialOffset=0, offsetLimits=c(0, 10000), guess=NULL)
@@ -654,91 +648,78 @@ getTrackFitFixedPhase <- function(object, slot='vx', initialAmplitude=40, amplit
      return(list(par=c(phaseShift=as.numeric(phaseShift), amplitude=as.numeric(bestFit$par['amplitude']), offset=as.numeric(bestFit$par['offset'])), fit=bestFit))
 }
 
-getWindowIndices <- function(sweep, window, i)
-{
-     # Is startTimeI a vector index or a frame number?
-     startLine <- sweep$line[i]
-     endI <- which(sweep$line > startLine + window*as.numeric(sweep$A))[1]-1 # window*sweep$A represents window number of pi/2 sections of signal
-     if(endI > i)
-     {
-          endI <- i
-     }
-     if(endI > length(sweep$t))
-     {
-          return(NULL)
-     }
-     return(i:endI)
-     
-     #      startInfTime <- which(inflections >= startTime)[1]
-     #      endInfTime <- startInfTime + window - 1
-     #      #      validInflections <- inflections[i:(i + window - 1)]
-     #      #      startInfTime <- validInflections[1]
-     #      #      endInfTime <- validInflections[length(validInflections)]
-     #      #      startTimeI <- which(times >= startInfTime)[1]
-     #      endTimeI <- which(times > endInfTime)[1] - 1
-     #      #      if(is.na(startTimeI) | is.na(endTimeI))
-     #      #      {
-     #      #           browser()
-     #      #      }
-     #      return(startTimeI:endTimeI)
-}
+# getWindowIndices <- function(sweep, window, i)
+# {
+#      # Is startTimeI a vector index or a frame number?
+#      startLine <- sweep$line[i]
+#      endI <- which(sweep$line > startLine + window*as.numeric(sweep$A))[1]-1 # window*sweep$A represents window number of pi/2 sections of signal
+#      if(endI > i)
+#      {
+#           endI <- i
+#      }
+#      if(endI > length(sweep$t))
+#      {
+#           return(NULL)
+#      }
+#      return(i:endI)
+# }
+# 
+# getTrackRollFit <- function(object, window=7, slot='vx', amplitudeLimits=c(0.25,500), offset=0, guess=NULL)
+# {
+#      if(is.null(guess))
+#      {
+#           guess <- getTrackParamGuess(object)
+#      }
+#      
+#      amplitude <- guess['amplitude']
+#      indices <- object@index # Index means frames in JEX
+#      fullSweep <- getTrackSweep(track=object, amplitude=amplitude)
+#      inflections <- fullSweep$inflections
+#      times <- fullSweep$t
+#      line <- fullSweep$line
+#      
+#      start <- 1
+#      end <- length(times)
+#      
+#      currentFit <- NULL
+#      currentAmplitude <- amplitude
+#      results <- list()
+#      browser()
+#      for(i in start:end)
+#      {
+#           if(!is.null(currentFit))
+#           {
+#                currentAmplitude <- currentFit$par['amplitude']
+#           }
+#           windowI <- getWindowIndices(fullSweep, window=window, i=i)
+#           if(is.null(windowI))
+#           {
+#                browser()
+#                break
+#           }
+#           print(paste('Starting next timepoint', start, end, i))
+#           currentFit <- getTrackFitAmplitudeOnly(object, slot=slot, initialAmplitude=currentAmplitude, amplitudeLimits=amplitudeLimits, phaseShift=object@phaseShift, offset=offset, indices=object@index[windowI], guess=FALSE)
+#           results[as.character(indices[i + (windowI%/%2) + 1])] <- list(currentFit)
+#      }
+#      return(results)
+# }
 
-getTrackRollFit <- function(object, window=7, slot='vx', amplitudeLimits=c(0.25,500), offset=0, guess=NULL)
+getTrackFitAmplitudeOnly <- function(object, slot='vx', initialAmplitude=40, amplitudeLimits=c(0,500), phaseShift=0, offset=0, frames=-1, guess=FALSE)
 {
-     if(is.null(guess))
+     if(frames[1] < 0)
      {
-          guess <- getTrackParamGuess(object)
-     }
-     
-     amplitude <- guess['amplitude']
-     indices <- object@index # Index means frames in JEX
-     fullSweep <- getTrackSweep(track=object, amplitude=amplitude)
-     inflections <- fullSweep$inflections
-     times <- fullSweep$t
-     line <- fullSweep$line
-     
-     start <- 1
-     end <- length(times)
-     
-     currentFit <- NULL
-     currentAmplitude <- amplitude
-     results <- list()
-     browser()
-     for(i in start:end)
-     {
-          if(!is.null(currentFit))
-          {
-               currentAmplitude <- currentFit$par['amplitude']
-          }
-          windowI <- getWindowIndices(fullSweep, window=window, i=i)
-          if(is.null(windowI))
-          {
-               browser()
-               break
-          }
-          print(paste('Starting next timepoint', start, end, i))
-          currentFit <- getTrackFitAmplitudeOnly(object, slot=slot, initialAmplitude=currentAmplitude, amplitudeLimits=amplitudeLimits, phaseShift=object@phaseShift, offset=offset, indices=object@index[windowI], guess=FALSE)
-          results[as.character(indices[i + (windowI%/%2) + 1])] <- list(currentFit)
-     }
-     return(results)
-}
-
-getTrackFitAmplitudeOnly <- function(object, slot='vx', initialAmplitude=40, amplitudeLimits=c(0,500), phaseShift=0, offset=0, indices=-1, guess=FALSE)
-{
-     if(indices[1] < 0)
-     {
-          indices <- object@index
+          frames <- object$frames
      }
      if(guess[1]==TRUE)
      {
           initialAmplitude <- getTrackParamGuess(object)['amplitude']
      }
      
-     ### Out this into calc of bestFit so we can specify indices
+     ### Out this into calc of bestFit so we can specify frames
      #sse(sin=object@sin, phaseShift=phaseShift, amplitude=amplitude, offset=offset, fi=object@fi, ff=object@ff, ti=object@ti, tf=object@tf, samplingFreq=object@samplingFreq, data=slot(object, slot), indices=indices)
      
      bestFit <- optim(par=c(amplitude=as.numeric(initialAmplitude)), 
-                      function(par, object, slot, phaseShift, offset, indices){sseTrack(object=object, slot=slot, phaseShift=phaseShift, amplitude=par['amplitude'], offset=offset, indices=indices)}, 
+                      function(par, object, slot, phaseShift, offset, indices){sseTrack(object=object, slot=slot, phaseShift=phaseShift, amplitude=par['amplitude'], offset=offset, frames=frames)}, 
                       method='L-BFGS-B', 
                       lower=c(min(amplitudeLimits)), 
                       upper=c(max(amplitudeLimits)), 
@@ -747,7 +728,7 @@ getTrackFitAmplitudeOnly <- function(object, slot='vx', initialAmplitude=40, amp
                       slot=slot,
                       phaseShift=phaseShift,
                       offset=offset,
-                      indices=indices)
+                      frames=frames)
      return(bestFit)
 }
 
@@ -780,11 +761,10 @@ getTrackFitAll <- function(object, slot='vx', initialAmplitude=40, amplitudeLimi
      return(list(par=c(phaseShift=as.numeric(bestFit$par['phaseShift']), amplitude=as.numeric(bestFit$par['amplitude']), offset=as.numeric(bestFit$par['offset'])), fit=bestFit))
 }
 
-getTrackParamGuess <- function(object, slot='x', amplitudeLimits=c(0,500), phaseShiftLimits=c(-pi, pi), offsetLimits=c(-10000,10000))
+getTrackParamGuess <- function(object, slot='vx', amplitudeLimits=c(0,500), phaseShiftLimits=c(-pi, pi), offsetLimits=c(-10000,10000))
 {
-     offset <- mean(slot(object,slot))
-     amplitude <- mean(abs(getSlot(object,slot,rel=T)))
-     #     amplitude <- (amplitude[2]-amplitude[1])/2
+     offset <- mean(object$getSlot(slot=slot))
+     amplitude <- mean(abs(object$getSlot(slot=slot,rel=TRUE)))
      phaseShift <- 0
      return(c(phaseShift=phaseShift, amplitude=amplitude, offset=offset))
 }
@@ -796,17 +776,13 @@ plotFit <- function(track, fit=NULL, ...)
           print('Generating fit to plot...')
           fit <- getTrackFitAll(track)
      }
-     plot(track, slotY='vx', relY=FALSE, add=FALSE, ...)
+     track$plot(slotY='vx', relY=FALSE, add=FALSE, ...)
      guessPar <- getTrackParamGuess(track)
-     guess <- getSweep(sin=track@parent@sin, amplitude=guessPar['amplitude'], phaseShift=guessPar['phaseShift'], offset=guessPar['offset'], fi=track@parent@fi, ff=track@parent@ff, tAll=track@parent@tAll, frames=track@frames)
-     #lines(guess$t, guess$v, col='blue')
-     predicted <- getSweep(sin=track@parent@sin, amplitude=fit$par['amplitude'], phaseShift=fit$par['phaseShift'], offset=fit$par['offset'], fi=track@parent@fi, ff=track@parent@ff, tAll=track@parent@tAll, frames=track@frames)
+     guess <- getSweep(sin=track$.parent$sin, amplitude=guessPar['amplitude'], phaseShift=guessPar['phaseShift'], offset=guessPar['offset'], fi=track$.parent$fi, ff=track$.parent$ff, tAll=track$.parent$tAll, frames=track$frames)
+     predicted <- getSweep(sin=track$.parent$sin, amplitude=fit$par['amplitude'], phaseShift=fit$par['phaseShift'], offset=fit$par['offset'], fi=track$.parent$fi, ff=track$.parent$ff, tAll=track$.parent$tAll, frames=track$frames)
      lines(predicted$t, predicted$v, col='red')
-     #lines(predicted$t, predicted$x-mean(predicted$x), col='green')
      points(predicted$inflections, rep(0,length(predicted$inflections)))
-     points(track@t[track@validFrames], track@vx[track@validFrames], col='blue')
-     #print("Guess:")
-     #print(guessPar)
+     points(track$points$t[track$validFrames], track$points$vx[track$validFrames], col='blue')
      print("Fit:")
      print(fit$par)
 }
@@ -818,43 +794,43 @@ sseTrackList <- function(object, slot, phaseShift, initialAmplitude=50, amplitud
      print(paste("Optimizing phaseshift: ", phaseShift, sep=''))
      sseRet <- 0
      count <- 1
-     total <- length(object@tracks)
+     total <- object$length()
      if(guess==TRUE)
      {
-          for(track in object@tracks)
+          for(track in object$tracks)
           {
                bestFit <- getTrackFitFixedPhase(object=track, slot=slot, initialAmplitude=initialAmplitude, amplitudeLimits=amplitudeLimits, phaseShift=phaseShift, initialOffset=initialOffset, offsetLimits=offsetLimits, guess=getTrackParamGuess(track))
                sseRet <- sseRet + bestFit$fit$value #bestFit$value gives the value of the sseTrack at the best fit param
-               print(paste(count, " of ", total, " - ID:", track@id, ", phaseShift:", bestFit$par['phaseShift'], ", amplitude:", bestFit$par['amplitude'], ", offset:", bestFit$par['offset']))
+               print(paste(count, " of ", total, " - ID:", track$id, ", phaseShift:", bestFit$par['phaseShift'], ", amplitude:", bestFit$par['amplitude'], ", offset:", bestFit$par['offset']))
                count <- count + 1
           }
      }
      else
      {
-          for(track in object@tracks)
+          for(track in object$tracks)
           {
                bestFit <- getTrackFitFixedPhase(object=track, initialAmplitude=initialAmplitude, amplitudeLimits=amplitudeLimits, phaseShift=phaseShift, initialOffset=initialOffset, offsetLimits=offsetLimits) # Don't use the getTrackParamGuessFunction
                sseRet <- sseRet + bestFit$fit$value #bestFit$value gives the value of the sseTrack at the best fit param
-               print(paste(count, " of ", total, " - ID:", track@id, ", phaseShift:", bestFit$par['phaseShift'], ", amplitude:", bestFit$par['amplitude'], ", offset:", bestFit$par['offset']))
+               print(paste(count, " of ", total, " - ID:", track$id, ", phaseShift:", bestFit$par['phaseShift'], ", amplitude:", bestFit$par['amplitude'], ", offset:", bestFit$par['offset']))
                count <- count + 1
           }
      }
      return(sseRet)
 }
 
-getTrackListPhaseShiftGuess <- function(object, slot='x')
+getTrackListPhaseShiftGuess <- function(object, slot='vx')
 {
      ranges <- numeric(0)
      ids <- numeric(0)
-     for(track in object@tracks)
+     for(track in object$tracks)
      {
           range <- range(track, 'x')
           ranges <- c(ranges, range[2]-range[1])
-          ids <- c(ids, track@id)
+          ids <- c(ids, track$id)
      }
      testerIndex <- which(ranges == max(ranges))[1]
      testerId <- ids[testerIndex]
-     testerTrack <- getTrack(object, testerId)
+     testerTrack <- object$getTrack(testerId)
      fit <- getTrackFitAll(testerTrack)
      plotFit(testerTrack, fit)
      return(as.numeric(fit$par['phaseShift']))
@@ -874,48 +850,44 @@ setTrackListPhaseShift <- function(object, slot='vx', initialPhaseShift=0, phase
                       control=list(trace=3),
                       object=object,
                       slot=slot)
-     object@phaseShift <- bestFit$par['phaseShift']
-     for(i in 1:length(object@tracks))
-     {
-          object@tracks[[i]]@phaseShift <- bestFit$par['phaseShift']
-     }
-     return(object)
+     phaseShift <- bestFit$par['phaseShift']
+     return(phaseShift)
 }
 
 
 ##### Butterworth Filters #####
 
-getFilter <- function(samplingFreq=0.5, passFreq=0.01, stopFreq=0.005, Rp=0.5, Rs=30)
-{
-     return(butter(buttord(Wp=passFreq/(samplingFreq/2), Ws=stopFreq/(samplingFreq/2), Rp=Rp, Rs=Rs)))
-}
+# getFilter <- function(samplingFreq=0.5, passFreq=0.01, stopFreq=0.005, Rp=0.5, Rs=30)
+# {
+#      return(butter(buttord(Wp=passFreq/(samplingFreq/2), Ws=stopFreq/(samplingFreq/2), Rp=Rp, Rs=Rs)))
+# }
 
-compare <- function(stopFreq=0.005, passFreq=0.01, samplingFreq=0.5, atFreq=0.01)
-{
-     t <- seq(0,5*1/passFreq,1/samplingFreq)
-     bf <- getFilter(stopFreq=stopFreq, passFreq=passFreq, samplingFreq=samplingFreq)
-     raw <- sin(2*pi*atFreq*t)
-     filtered <- as.numeric(filter(bf, raw))
-     plot(t, raw, type='l', xlab='t', ylab='amplitude')
-     lines(t, filtered, col='red')
-}
+# compare <- function(stopFreq=0.005, passFreq=0.01, samplingFreq=0.5, atFreq=0.01)
+# {
+#      t <- seq(0,5*1/passFreq,1/samplingFreq)
+#      bf <- getFilter(stopFreq=stopFreq, passFreq=passFreq, samplingFreq=samplingFreq)
+#      raw <- sin(2*pi*atFreq*t)
+#      filtered <- as.numeric(filter(bf, raw))
+#      plot(t, raw, type='l', xlab='t', ylab='amplitude')
+#      lines(t, filtered, col='red')
+# }
 
-plotFreqResponse <- function(filter, samplingFreq=0.5, passFreq=0.01, stopFreq=0.005, Rp=0.5, Rc=30)
-{
-     plot(c(0, passFreq, passFreq, 0, 0), c(0, 0, -Rp, -Rp, 0),
-          type = "l", xlab = "Frequency (Hz)", ylab = "Attenuation (dB)",
-          col = "green", ylim = c(-Rc-Rp,0), xlim = c(0,4*passFreq))
-     lines(c(0, stopFreq, stopFreq, 0, 0), c(-Rc-Rp, -Rc-Rp, -Rc, -Rc, -Rc-Rp),
-           col = "red", ylim = c(-Rc-Rp,0), xlim = c(0,2000))
-     hf <- freqz(filter, n=5000, Fs = samplingFreq)
-     lines(hf$f, 20*log10(abs(hf$h)))
-}
+# plotFreqResponse <- function(filter, samplingFreq=0.5, passFreq=0.01, stopFreq=0.005, Rp=0.5, Rc=30)
+# {
+#      plot(c(0, passFreq, passFreq, 0, 0), c(0, 0, -Rp, -Rp, 0),
+#           type = "l", xlab = "Frequency (Hz)", ylab = "Attenuation (dB)",
+#           col = "green", ylim = c(-Rc-Rp,0), xlim = c(0,4*passFreq))
+#      lines(c(0, stopFreq, stopFreq, 0, 0), c(-Rc-Rp, -Rc-Rp, -Rc, -Rc, -Rc-Rp),
+#            col = "red", ylim = c(-Rc-Rp,0), xlim = c(0,2000))
+#      hf <- freqz(filter, n=5000, Fs = samplingFreq)
+#      lines(hf$f, 20*log10(abs(hf$h)))
+# }
 
-filterWandering <- function(object, slot='x', stopFreq=0.005, passFreq=0.01)
-{
-     bwf = getFilter(samplingFreq=object@samplingFreq, stopFreq=stopFreq, passFreq=passFreq)
-     ret <- filter(bwf, slot(object, slot))
-     newTrack <- object
-     slot(newTrack, slot) <- as.numeric(ret)
-     return(newTrack)
-}
+# filterWandering <- function(object, slot='x', stopFreq=0.005, passFreq=0.01)
+# {
+#      bwf = getFilter(samplingFreq=object@samplingFreq, stopFreq=stopFreq, passFreq=passFreq)
+#      ret <- filter(bwf, slot(object, slot))
+#      newTrack <- object
+#      slot(newTrack, slot) <- as.numeric(ret)
+#      return(newTrack)
+# }
