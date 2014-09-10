@@ -18,7 +18,15 @@ getBlockingCost <- function(maxDist)
 # TO USE MAXDIST
 getCutoff <- function(UL, blockingCost, factorOverMax=1.05)
 {
-     return(factorOverMax*max(UL[UL < blockingCost]))
+     potentialMatches <- UL[UL < blockingCost]
+     if(isempty(potentialMatches))
+     {
+          return(blockingCost/10)
+     }
+     else
+     {
+          return(factorOverMax*max(UL[UL < blockingCost]))
+     }
 }
 
 getLinkMatrix <- function(points, maxDist=15, direction=c(1,0,0), directionality=10)
@@ -64,11 +72,11 @@ getLinkMatrix <- function(points, maxDist=15, direction=c(1,0,0), directionality
 DirectionalLinearAssignment <- function(points, maxDist=10, direction=c(1,0,0), directionality=10, uniformityDistThresh=-1, digits=4)
 {     
      # Do first round of tracking as first guess
-     cat("Getting initial cost matrix\n")
+     #cat("Getting initial cost matrix\n")
      linkMatrix <- getLinkMatrix(points, maxDist=maxDist, direction=direction, directionality=directionality)
      cost <- getCostMatrix(UL=linkMatrix$cost, digits=digits, maxDist=maxDist)
      
-     cat("Linking (round 1)\n")
+     #cat("Linking (round 1)\n")
      px <- LinearAssignment(cost)
      
      # A negative number indicates that we should no apply uniformity constraint
@@ -76,7 +84,7 @@ DirectionalLinearAssignment <- function(points, maxDist=10, direction=c(1,0,0), 
      {
           uniformityCostThresh <- uniformityDistThresh*uniformityDistThresh
           
-          cat("Determining directionality\n")
+          #cat("Determining directionality\n")
           diagonal <- 1:length(px)
           # First find valid rows and cols
           nrows <- nrow(points$t0)
@@ -91,19 +99,21 @@ DirectionalLinearAssignment <- function(points, maxDist=10, direction=c(1,0,0), 
           }
           
           linkedSign <- -1*sign(sum(sign(linkedCosts))) # determine which sign to penalize/remove (i.e., replace with blocking cost)
+          if(!is.na(linkedSign)) # this catches condition where there are essentially all blocking costs (i.e., no valid links)
+          {
+               if(linkedSign > 0)
+               {
+                    linkMatrix$cost[linkMatrix$signedCost > uniformityCostThresh] <- getBlockingCost(maxDist)
+               }
+               else
+               {
+                    linkMatrix$cost[linkMatrix$signedCost < -1*uniformityCostThresh] <- getBlockingCost(maxDist)
+               }
+          }
           
-          cat("Applying uniformity constraint\n")
-          if(linkedSign > 0)
-          {
-               linkMatrix$cost[linkMatrix$signedCost > uniformityCostThresh] <- getBlockingCost(maxDist)
-          }
-          else
-          {
-               linkMatrix$cost[linkMatrix$signedCost < -1*uniformityCostThresh] <- getBlockingCost(maxDist)
-          }
           cost <- getCostMatrix(UL=linkMatrix$cost, digits=digits, maxDist=maxDist)
           
-          cat("Linking (round 2)\n\n")
+          #cat("Linking (round 2)\n\n")
           px <- LinearAssignment(cost)
      }
 
