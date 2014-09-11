@@ -16,7 +16,7 @@ getBlockingCost <- function(maxDist)
 # IF AFTER WE SET THRESHOLD, THEN THIS CHANGES WHAT WE THINK 
 # ABOUT THE CUTOFF VALUE AND WE CAN POTENTIALLY CHANGE THE FUNCTION
 # TO USE MAXDIST
-getCutoff <- function(UL, blockingCost, factorOverMax=1.05)
+getCutoff <- function(UL, blockingCost, factorOverMax=10)
 {
      potentialMatches <- UL[UL < blockingCost]
      if(isempty(potentialMatches))
@@ -79,10 +79,10 @@ DirectionalLinearAssignment <- function(points, maxDist=10, direction=c(1,0,0), 
      #cat("Linking (round 1)\n")
      px <- LinearAssignment(cost)
      
-     # A negative number indicates that we should no apply uniformity constraint
+     # A negative number indicates that we should not  apply uniformity constraint
      if(uniformityDistThresh >= 0)
      {
-          uniformityCostThresh <- uniformityDistThresh*uniformityDistThresh
+          uniformityCostThresh <- (directionality*uniformityDistThresh)^2 + uniformityDistThresh^2
           
           #cat("Determining directionality\n")
           diagonal <- 1:length(px)
