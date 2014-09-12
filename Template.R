@@ -50,7 +50,7 @@ trackList$smoothVelocities(fit=bestFit, dist=10, maxWidth=25)
 # fraction of the interval between changed in flow direction (i.e., validStart=0.1 says to wait 10% of the time between direction changes to mark time frames as valid)
 # 'validEnd' is also a fraction of the same interval. Frames between 'validStart' and 'validEnd' within each interval bounded by changes in flow direction
 # are recorded as being valid.
-trackList$setValidFrames(fit=bestFit, validStart=0.1, validEnd=0.99)
+trackList$setValidFrames(fit=bestFit, validStart=0.15, validEnd=0.9)
 
 # Get and plot the percent of cells adhered over time
 results = trackList$getPercentAdhered(velocityThreshold=3)
