@@ -1,15 +1,8 @@
-# rm(list=ls()[!(ls() %in% 'maximaList')])
-
-source('~/.Rprofile')
-source('~/Public/DropBox/GitHub/R-Adhesion/Tracking.R')
-# source('~/Public/DropBox/GitHub/R-Adhesion/ADhesionAnalysis_HelperFunctions.R')
 library(foreign)
 library(pracma)
-
-# path1 <- '/Users/jaywarrick/Documents/JEX/LocalTest/temp/JEXData0000000001.arff'
-# path2 <- '/Users/jaywarrick/Documents/JEX/LocalTest/PC3 vs LNCaP/Cell_x0_y0/Roi-Maxima Upper/x0_y0.jxd'
-# fileTable <- read.arff(path1)
-
+library(plyr)
+library(methods)
+library(stats)
 
 ##### Maxima #####
 
@@ -89,7 +82,7 @@ MaximaList <- setRefClass('MaximaList',
                           methods = list(
                                initializeWithFile = function(path, timeDimName='Time')
                                {
-                                    library(foreign)
+                                    require(foreign)
                                     if(!is.null(path))
                                     {
                                          maximaFile <- read.arff(path)
@@ -247,7 +240,7 @@ TrackList <- setRefClass('TrackList',
                          methods = list(
                               initializeWithFile = function(file=NULL, sin=FALSE, fi, ff, tAll)
                               {
-                                   library(foreign)
+                                   require(foreign)
                                    tracksFile <- read.arff(file)
                                    tracksFile2 <- reorganizeTable(tracksFile, nameCol='Metadata')
                                    
@@ -378,6 +371,10 @@ TrackList <- setRefClass('TrackList',
                               filterTracks = function(fun, ...)
                               {
                                    tracks <<- Filter(function(x){fun(x,...)}, tracks)
+                                   if(base::length(tracks) == 0)
+                                   {
+                                        message("No tracks fit filter, resulting tracklist is of length 0!")
+                                   }
                               },
                               sortTracks = function(fun=function(x){return(x$length())}, decreasing=TRUE, ...)
                               {
@@ -496,13 +493,23 @@ TrackList <- setRefClass('TrackList',
                                         track$setValidFrames(validFrames)
                                    }
                               },
-                              refresh = function()
+                              getPercentAdhered = function(velocityThreshold=3)
                               {
-                                   .self <<- TrackList$new(.self)
-                                   for(track in tracks)
+                                   trackMatrix <- getMatrix(slot='vxs', validOnly=TRUE)
+                                   ret <- list()
+                                   for(frame in colnames(trackMatrix))
                                    {
-                                        track$refresh()
+                                        velocities <- trackMatrix[,frame]
+                                        velocities <- abs(velocities[!is.na(velocities)])
+                                        if(!isempty(velocities))
+                                        {
+                                             adhered <- sum(velocities < velocityThreshold)/base::length(velocities)
+                                             ret[[frame]] <- adhered
+                                        }
                                    }
+                                   percents <- 100*as.numeric(ret)
+                                   times <- trackList$tAll[as.numeric(names(ret))+1]
+                                   return(data.frame(time=times, percentAdhered=percents))
                               }
                          )
 ) 
@@ -778,6 +785,60 @@ Track <- setRefClass('Track',
 
 ##### General #####
 
+#' Take an arff file and reorganize it into a more standard 'table' format. Specifically this is used to
+#' import an arff file from JEX as JEX uses a column called 'Measurement' to define the type of measurment
+#' or property being stored and 'Value', the value of that property.
+#' 
+#' @param data An object that is the result of using foreign::read.arff(file) on an arff file
+#' @param baseName An optional basename to add to whatever label is in the \code{nameCol} portion of each row entry
+#' @param convertToNumeric An option to convert the columns of information within \code{data} leading up to 
+#' \code{nameCol} and \code{valueCol} to numeric or to leave as text. Default is to convert to numeric (i.e., TRUE)
+#' @param nameCol The name of the column that describes the nature of the value in the \code{valueCol}
+#' @param valueCol The name of the column with the values of the properties listed in the \code{nameCol}
+reorganizeTable <- function(data, baseName=NA, convertToNumeric=TRUE, nameCol='Measurement', valueCol='Value')
+{
+     require(plyr)
+     idCols <- names(data)
+     idCols <- idCols[-which(idCols %in% c(nameCol,valueCol))]
+     newData <- data.frame(stringsAsFactors=FALSE)
+     measurements <- unique(data[,nameCol])
+     #     m <- measurements[1]
+     #     browser()
+     for(m in measurements)
+     {
+          if(is.na(baseName))
+          {
+               newColName <- m
+               newColName <- gsub(' ','.',newColName, fixed=TRUE) # Get rid of extraneous spaces
+          }else
+          {
+               newColName <- paste(baseName,'.',m, sep='')
+               newColName <- gsub(' ','.',newColName, fixed=TRUE) # Get rid of extraneous spaces
+          }
+          
+          temp <- data[data[,nameCol]==m,]
+          temp2 <- temp[,c(idCols,valueCol)]
+          names(temp2)[names(temp2)==valueCol] <- newColName
+          if(nrow(newData) == 0)
+          {
+               newData <- temp2
+          }else
+          {
+               newData <- merge(newData, temp2, by=idCols)
+          }
+     }
+     
+     if(convertToNumeric)
+     {
+          for(n in idCols)
+          {
+               newData[,n] <- as.numeric(as.character(newData[,n]))
+          }
+     }
+     
+     return(newData)
+}
+
 first <- function(x)
 {
      return(x[1])
@@ -785,6 +846,7 @@ first <- function(x)
 
 last <- function(x)
 {
+     require(pracma)
      return(x[numel(x)])
 }
 
@@ -891,7 +953,6 @@ trackFrameFilter <- function(track, startMin=0, startMax=1000000, endMin=0, endM
 
 ##### Fitting #####
 
-
 getSweep <- function(amplitude=1, phaseShift=0, offset=0, sin=FALSE, fi=2, ff=0.1, tAll=seq(0,500,1), frames=-1, guess=NULL)
 {
      if(frames[1] < 0 | max(frames) > (length(tAll)-1))
@@ -981,32 +1042,6 @@ getSweep <- function(amplitude=1, phaseShift=0, offset=0, sin=FALSE, fi=2, ff=0.
      }
 }
 
-getTrackFitFixedPhase <- function(track, slot='vx', initialAmplitude=40, amplitudeLimits=c(0,500), phaseShift=0, initialOffset=0, offsetLimits=c(0, 10000), guess=NULL)
-{
-     if(is.null(guess))
-     {
-          bestFit <- optim(par=c(amplitude=initialAmplitude, offset=initialOffset), 
-                           function(par, slot, phaseShift){track$sseTrack(slot=slot, amplitude=par['amplitude'], phaseShift=phaseShift, offset=par['offset'])}, 
-                           method='L-BFGS-B', 
-                           lower=c(min(amplitudeLimits), min(offsetLimits)), 
-                           upper=c(max(amplitudeLimits), max(offsetLimits)), 
-                           control=list(trace=0),
-                           slot=slot,
-                           phaseShift=phaseShift)
-     }else
-     {
-          bestFit <- optim(par=c(amplitude=as.numeric(guess['amplitude']), offset=as.numeric(guess['offset'])), 
-                           function(par, slot, phaseShift){track$sseTrack(slot=slot, amplitude=par['amplitude'], phaseShift=phaseShift, offset=par['offset'])}, 
-                           method='L-BFGS-B', 
-                           lower=c(min(amplitudeLimits), min(offsetLimits)), 
-                           upper=c(max(amplitudeLimits), max(offsetLimits)), 
-                           control=list(trace=0),
-                           slot=slot,
-                           phaseShift=phaseShift)
-     } 
-     return(list(par=c(phaseShift=as.numeric(phaseShift), amplitude=as.numeric(bestFit$par['amplitude']), offset=as.numeric(bestFit$par['offset'])), fit=bestFit))
-}
-
 sseBulk <- function(trackList, trackMatrix, amplitude=50, phaseShift=0)
 {
      # Cols are frames, rows are track ids
@@ -1023,15 +1058,9 @@ sseBulk <- function(trackList, trackMatrix, amplitude=50, phaseShift=0)
 
 getBulkPhaseShift <- function(trackList)
 {
+     require(stats)
      trackMatrix <- trackList$getMatrix()
-     #      aTrack <- trackList$getTrack(0)
-     #      print(aTrack)
-     #      r <- aTrack$range('x', rel=TRUE)
-     #      r <- (r[2]-r[1])/2
-     #      print(r)
      amplitude <- max(as.numeric(trackList$getProp(fun=function(x){r <- x$range('x', rel=TRUE); r <- (r[2]-r[1])/2; return(r)})))
-     print("AMPLITUDE")
-     print(amplitude)
      guess <- c(amplitude=amplitude, phaseShift=0)
      amplitudeLimits=c(0.5, 10*amplitude)
      phaseShiftLimits=c(-pi, pi)
@@ -1046,117 +1075,3 @@ getBulkPhaseShift <- function(trackList)
                       trackMatrix=trackMatrix)
      return(list(par=c(phaseShift=as.numeric(bestFit$par['phaseShift']), amplitude=as.numeric(bestFit$par['amplitude']), offset=as.numeric(bestFit$par['offset'])), fit=bestFit))
 }
-
-# With these fits, what should we do with respect to frames?
-# Also, should we do the initial determination of the phase shift using bulk data and single curve?
-getTrackFitAmplitudeOnly <- function(track, slot='vx', initialAmplitude=40, amplitudeLimits=c(0,500), phaseShift=0, offset=0, frames=-1, guess=FALSE)
-{
-     if(frames[1] < 0)
-     {
-          frames <- track$points$frame
-     }
-     if(guess[1]==TRUE)
-     {
-          initialAmplitude <- getTrackParamGuess(object)['amplitude']
-     }
-     
-     ### Out this into calc of bestFit so we can specify frames
-     #sse(sin=object@sin, phaseShift=phaseShift, amplitude=amplitude, offset=offset, fi=object@fi, ff=object@ff, ti=object@ti, tf=object@tf, samplingFreq=object@samplingFreq, data=slot(object, slot), indices=indices)
-     
-     bestFit <- optim(par=c(amplitude=as.numeric(initialAmplitude)), 
-                      function(par, object, slot, phaseShift, offset, indices){sseTrack(object=object, slot=slot, phaseShift=phaseShift, amplitude=par['amplitude'], offset=offset, frames=frames)}, 
-                      method='L-BFGS-B', 
-                      lower=c(min(amplitudeLimits)), 
-                      upper=c(max(amplitudeLimits)), 
-                      control=list(trace=0), 
-                      object=object,
-                      slot=slot,
-                      phaseShift=phaseShift,
-                      offset=offset,
-                      frames=frames)
-     return(bestFit)
-}
-
-##### Testing 1 #####
-
-# maxima1 <- new('Maxima')
-# maxima2 <- maxima1$copy()
-# maxima3 <- maxima1$copy()
-# maxima1$initializeWithROI(frame=0, polygon='1,1,1;2,2,2;3,3,3;4,4,4;51,61,5')
-# maxima2$initializeWithROI(frame=1, polygon='2,1,5;3,2,4;4,3,3;5,4,2;50,60,1')
-# maxima3$initializeWithROI(frame=2, polygon='1,1,1;2,2,2;3,3,3;4,4,4;5,5,5')
-# 
-# maximaList <- new('MaximaList')
-# maximaList$setMaxima(maxima1)
-# maximaList$setMaxima(maxima2)
-# maximaList$setMaxima(maxima3)
-# maximaList$trackBack(startFrame=2, endFrame=0)
-# 
-# trackList <- maximaList$getTrackList(sin=FALSE, fi=2, ff=0.1, tAll=0:1)
-# maximaList$generateMaximaPlots(path='~/Documents/MMB/Projects/Adhesion/R/Testing/Plots1')
-
-##### Testing 2 #####
-
-# maximaList <- new('MaximaList')
-# maximaList$initializeWithFile(path=path2)
-# mListCopy <- maximaList$copy()
-# mListCopy$trackBack(startFrame=501)
-# # trackList <- mListCopy$getTrackList(sin=FALSE, fi=2, ff=0.1, tAll=0:515)
-
-# # ##### Testing 3 #####
-# # 50 ms exposure. 2361 images in 500 s = 4.722 frames / sec
-# path3 <- '/Volumes/BeebeBig/Jay/JEX Databases/Adhesion FACS/RPMI P-Sel 5Hz-100mHz/Cell_x0_y0/Roi-Tracks Roi/x0_y0.jxd'
-# path4 <- '/Volumes/BeebeBig/Jay/JEX Databases/Adhesion FACS/RPMI P-Sel 5Hz-100mHz/Cell_x0_y0/Roi-Maxima/x0_y0.jxd'
-# path5 <- '~/Documents/MMB/Projects/Adhesion/R/Testing/SparseMaxima.txt'
-# if(!('maximaList' %in% ls()))
-# {
-#      maximaList <- new('MaximaList')
-#      maximaList$initializeWithFile(path=path5)
-# } else
-# {
-#      maximaList <- MaximaList$new(maximaList)
-# }
-# mListCopy <- maximaList$copy()
-# mListCopy$trackBack(startFrame=9994, endFrame=0, maxDist=150, direction=c(1,0,0), directionality=10, uniformityDistThresh=2, digits=1)
-# mListCopy$generateMaximaPlots(path='~/Documents/MMB/Projects/Adhesion/R/Testing/Plots1')
-# trackList <- mListCopy$getTrackList(sin=FALSE, fi=2, ff=0.01, tAll=seq(0,500,length.out=maximaList$length()))
-# trackList$filterTracks(fun = trackLengthFilter, min=500, max=1000000)
-# # trackList$filterTracks(fun = trackFrameFilter, startMin=0, startMax=1000000, endMin=maximaList$length()-1, endMax=1000000)
-# trackList$plotTrackList()
-# bestFit <- getBulkPhaseShift(trackList)
-# duh <- getSweep(amplitude=bestFit$par['amplitude'], phaseShift=bestFit$par['phaseShift'], offset=0, sin=trackList$sin, fi=trackList$fi, ff=trackList$ff, tAll=trackList$tAll, frames=-1, guess=NULL)
-# lines(duh$t, duh$v, col='blue')
-# # aTrack <- trackList$getTrack(0)
-# widths <- getWindowWidths(fit=bestFit, trackList=trackList, dist=10, maxWidth=1000)
-# # aTrack$smoothVelocities(widths)
-# 
-# trackList$smoothVelocities(fit=bestFit, dist=10, maxWidth=25)
-# trackList$plotTrackList(slot='vxs', xlim=c(50,100))
-# lines(duh$t, duh$v, col='blue')
-# 
-# setwd('/Users/jaywarrick/Documents/MMB/Projects/Adhesion/R/Testing')
-# save(list = c('maximaList','trackList', 'bestFit'), file="20140911.Rdata")
-
-##### Testing Sweep #####
-# duh <- getSweep(amplitude=100, phaseShift=0, offset=0, sin=FALSE, fi=2, ff=0.01, tAll=seq(0,500,length.out=10001), frames=-1, guess=NULL)
-# plot(duh$t, duh$x, col='red', type='l', xlim=c(230, 250))
-
-# ##### Testing 4 #####
-# 
-# path3 <- '/Volumes/BeebeBig/Jay/JEX Databases/Adhesion FACS/RPMI P-Sel 5Hz-100mHz/Cell_x0_y0/Roi-Tracks Roi/x0_y0.jxd'
-# trackList <- new('TrackList')
-# trackList$initializeWithFile(file=path3, sin=TRUE, fi=5, ff=0.1, tAll=seq(0,500,length.out=2361))
-# trackList$filterTracks(fun = trackLengthFilter, min=50, max=1000000)
-# trackList$filterTracks(fun = trackFrameFilter, startMin=0, startMax=1000000, endMin=2360, endMax=1000000)
-# bestFit <- getBulkPhaseShift(trackList)
-# 
-# ##### Testing 5 #####
-# 
-# path <- "/Volumes/BeebeBig/Jay/JEX Databases/Adhesion FACS/Test/Cell_x0_y0/Roi-Tracks Roi/x0_y0.jxd"
-# path2 <- '/Users/jaywarrick/Documents/JEX/Raw Data/LNCaP.arff'
-# path3 <- '/Users/jaywarrick/Documents/JEX/LocalTest/PC3 vs LNCaP/Cell_x0_y0/Roi-Tracks Upper/x0_y0.jxd'
-# trackList <- new('TrackList')
-# trackList$initializeWithFile(file=path3, sin=TRUE, fi=1, ff=0.1, tAll=seq(0, 515, 1))
-# trackList$filterTracks(fun = trackLengthFilter, min=50, max=1000000)
-# trackList$filterTracks(fun = trackFrameFilter, startMin=0, startMax=1000000, endMin=515, endMax=1000000)
-# bestFit <- getBulkPhaseShift(trackList)
