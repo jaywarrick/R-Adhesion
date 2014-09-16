@@ -229,6 +229,16 @@ MaximaList <- setRefClass('MaximaList',
                                     }
                                     
                                     tryCatch(expr=makeThePlots(), finally=setwd(wd))
+                               },
+                               offsetFrames = function(offset=0)
+                               {
+                                    names(maxima) <<- as.character(as.numeric(names(maxima))+offset)
+                                    for(.maxima in maxima)
+                                    {
+                                         .maxima$frame <-.maxima$frame+offset
+                                    }
+                                    trackBackStart <<- trackBackStart + offset
+                                    trackBackEnd <<- trackBackEnd + offset
                                }
                           )
 )
@@ -344,28 +354,37 @@ TrackList <- setRefClass('TrackList',
                               },
                               calculateVelocities = function()
                               {
-                                   for(track in tracks)
-                                   {
-                                        track$calculateVelocities()
-                                   }
+                                   callOnTracks('calculateVelocities')
                               },
                               smoothVelocities = function(fit, dist, maxWidth)
                               {
-                                   widths <- getWindowWidths(fit=fit, trackList=.self, dist=dist, maxWidth=maxWidth)
-                                   tot <- base::length(names(tracks))
-                                   count <- 1
-                                   for(track in tracks)
-                                   {
-                                        cat("Smoothing velocities for track ", count, " of ", tot, ".\n", sep="")
-                                        track$smoothVelocities(widths)
-                                        count <- count + 1
-                                   }
+                                   widths <- getWindowWidths(fit=bestFit, trackList=trackList, dist=10, maxWidth=25)
+                                   callOnTracks('smoothVelocities', widths=widths)
                               },
                               applyToTracks = function(fun, ...)
                               {
                                    for(track in tracks)
                                    {
                                         track <- fun(track, ...)
+                                   }
+                              },
+                              callOnTracks = function(funName, ...)
+                              {
+                                   tot <- length()
+                                   count <- 0
+                                   for(track in tracks)
+                                   {
+                                        count <- count + 1
+                                        cat("Calling", funName, "on track", count, "of", tot, "\n")
+                                        # Have to do eval(parse()) because track[[funName]] is NULL while track$parsedFunName is not NULL, don't know why
+                                        # Now that the function is loaded we can call it using the [[]] method
+                                        theCall <- paste("track$'", funName, "'", sep="")
+                                        theFunc <- eval(parse(text=theCall))
+                                        if(is.null(theFunc))
+                                        {
+                                             stop(cat("Couldn't find function with name",funName))
+                                        }
+                                        do.call(theFunc, list(...))
                                    }
                               },
                               filterTracks = function(fun, ...)
@@ -698,23 +717,23 @@ Track <- setRefClass('Track',
                           addPoint = function(x, y, t, frame)
                           {
                                "
-                               #' Add a point to the 'points' field of this track. It is
-                               #' assumed you are adding things in an appropriate order.
-                               #' Typically the points are listed in order of frame.
-                               "
+                              #' Add a point to the 'points' field of this track. It is
+                              #' assumed you are adding things in an appropriate order.
+                              #' Typically the points are listed in order of frame.
+                              "
                                points <<- rbind(points, data.frame(x=x, y=y, t=t, frame=frame))
                           },
                           show = function()
                           {
                                "
-                               #' Prints the information of this object to the command line
-                               #' output. This overrides the basic 'show' method as a track
-                               #' carries a reference to its parent trackList (if it has been
-                               #' added to a trackList using the 'setTrack' method) which
-                               #' results in recursive printing of TrackList information
-                               #' because a 'show' for 'TrackList' calls 'show' on each 'Track'.
-                               #' This method eliminates this issue. 
-                               "
+                              #' Prints the information of this object to the command line
+                              #' output. This overrides the basic 'show' method as a track
+                              #' carries a reference to its parent trackList (if it has been
+                              #' added to a trackList using the 'setTrack' method) which
+                              #' results in recursive printing of TrackList information
+                              #' because a 'show' for 'TrackList' calls 'show' on each 'Track'.
+                              #' This method eliminates this issue. 
+                              "
                                cat("Reference class object of class 'Track'\n")
                                for(name in names(Track$fields()))
                                {
@@ -739,9 +758,9 @@ Track <- setRefClass('Track',
                           {
                                "
                                #' This method is provided as a convenience. It calls 'getSweep' using
-                               #' parameters that exist within the 'Track' and parent 'TrackList'
-                               #' when available or the 'getSweep' defualts.
-                               "
+	 				      #' parameters that exist within the 'Track' and parent 'TrackList'
+	 				      #' when available or the 'getSweep' defualts.
+	 				      "
                                if(validFramesOnly)
                                {
                                     frames <- validFrames
@@ -757,13 +776,13 @@ Track <- setRefClass('Track',
                           sseTrack = function(amplitude=50, phaseShift=0, offset=0, validFramesOnly=FALSE)
                           {
                                "
-                               #' Calculates the sum square error (i.e., sse) between this track
-                               #' and a sweep funciton with the given 'amplitude', 'phaseShift',
-                               #' and 'offset'. The parameter 'validFramesOnly' will limit the
-                               #' calculation to just the 'validFrames' listed in this Track.
-                               #' The parameter of 'sin' = T/F, and tAll, fi, and ff are passed
-                               #' from the track's parent 'TrackList'.
-                               "
+      				      #' Calculates the sum square error (i.e., sse) between this track
+	 				      #' and a sweep funciton with the given 'amplitude', 'phaseShift',
+	 				      #' and 'offset'. The parameter 'validFramesOnly' will limit the
+	 				      #' calculation to just the 'validFrames' listed in this Track.
+	 				      #' The parameter of 'sin' = T/F, and tAll, fi, and ff are passed
+	 				      #' from the track's parent 'TrackList'.
+	 				      "
                                if(validFramesOnly)
                                {
                                     frames <- validFrames
