@@ -19,6 +19,7 @@ for(.maxima in maximaList$maxima)
 }
 
 trackList$setValidFrames(fit=bestFit, validStart=0.15, validEnd=0.9)
+trackList$smoothVelocities(fit=bestFit, dist=10, maxWidth=25)
 trackList$plotTrackList(validOnly=TRUE, slot='vxs', fun=abs, ylim=c(0,50), xlim=c(400,500))
 trackMatrix <- trackList$getMatrix(slot='vxs', validOnly=TRUE)
 sum(!is.na(trackMatrix))
