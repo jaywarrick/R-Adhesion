@@ -1,11 +1,18 @@
 # Clear the workspace of any data, variables, and functions that are currently loaded.
 rm(list=ls())
+<<<<<<< HEAD
 
 #source("http://bioconductor.org/biocLite.R")
 #biocLite('GraphAlignment')
 # Load the functions that we'll be using.
 # source('~/Public/DropBox/GitHub/R-Adhesion/Tracking.R')
 # source('~/Public/DropBox/GitHub/R-Adhesion/OOTracking.R')
+=======
+#MMMMMINE
+#source("http://bioconductor.org/biocLite.R")
+#biocLite('GraphAlignment')
+# Load the functions that we'll be using.
+>>>>>>> FETCH_HEAD
 source('C:/Users/Elizabeth/Documents/GitHub/R-Adhesion/Tracking.R')
 source('C:/Users/Elizabeth/Documents/GitHub/R-Adhesion/OOTracking.R')
 
@@ -13,7 +20,10 @@ source('C:/Users/Elizabeth/Documents/GitHub/R-Adhesion/OOTracking.R')
 maximaList <- new('MaximaList')
 
 # The MaximaList knows how to read a JEX ROI file, so let's read it in to initialize the dataset
+<<<<<<< HEAD
 # maximaList$initializeWithFile(path='~/Documents/MMB/Projects/Adhesion/R/Testing/SparseMaxima.txt', timeDimName='Time')
+=======
+>>>>>>> FETCH_HEAD
 maximaList$initializeWithFile(path='C:/Users/Elizabeth/Desktop/x0_y0 points.txt', timeDimName='T')
 
 # Copy it and do stuff, keeping the original around in case we wnat to redo stuff without having to read in the dataset again.
@@ -21,18 +31,29 @@ mListCopy <- maximaList$copy()
 
 # Track the cells, backward in time starting at the frame called "startFrame" (latest frame) and ending at "endFrame" (the earliest frame)
 # FYI Frame numbers START AT 0 while in R indices START AT 1.
+<<<<<<< HEAD
 # mListCopy$trackBack(startFrame=5000, endFrame=4600, maxDist=150, direction=c(1,0,0), directionality=10, uniformityDistThresh=2, digits=1)
 mListCopy$trackBack(startFrame=479, endFrame=0, maxDist=150, direction=c(1,0,0), directionality=10, uniformityDistThresh=2, digits=1)
 
 # Plot all the maxima to pdf plots so that you can flip through pdfs and see where cells are when (good for trouble shooting but not necessary)
 # mListCopy$generateMaximaPlots(path='~/Documents/MMB/Projects/Adhesion/R/Testing/Plots1')
 mListCopy$generateMaximaPlots(path='C:/Users/Elizabeth/Documents/MMB/Projects/Adhesion/R/Testing/Plots1')
+=======
+mListCopy$trackBack(startFrame=479, endFrame=0, maxDist=150, direction=c(1,0,0), directionality=10, uniformityDistThresh=2, digits=1)
+
+# Plot all the maxima to pdf plots so that you can flip through pdfs and see where cells are when (good for trouble shooting but not necessary)
+#mListCopy$generateMaximaPlots(path='C:/Users/Elizabeth/Documents/MMB/Projects/Adhesion/R/Testing/Plots1')
+>>>>>>> FETCH_HEAD
 
 # Offset frames to actual start frame of the imported dataset.
 mListCopy$offsetFrames(offset=3991)
 
 # Now that the cells are tracked, we want to have the data reorganized into a list of tracks (i.e., a TrackList)
+<<<<<<< HEAD
 trackList <- mListCopy$getTrackList(sin=FALSE, fi=2, ff=0.01, tAll=seq(0,500,length.out=10001))
+=======
+trackList <- mListCopy$getTrackList(sin=FALSE, fi=2, ff=0.01, tAll=seq(0,500,length.out=max(as.numeric(names(mListCopy$maxima)) + 1)))
+>>>>>>> FETCH_HEAD
 
 # Get rid of short tracks (i.e., cells that are hard too hard to follow for long periods of time like ones that go on and off screen)
 trackList$filterTracks(fun = trackLengthFilter, min=50, max=1000000)
