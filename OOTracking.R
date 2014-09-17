@@ -760,9 +760,9 @@ Track <- setRefClass('Track',
                           {
                                "
                                #' This method is provided as a convenience. It calls 'getSweep' using
- 				           #' parameters that exist within the 'Track' and parent 'TrackList'
- 				           #' when available or the 'getSweep' defualts.
- 				           "
+                               #' parameters that exist within the 'Track' and parent 'TrackList'
+                               #' when available or the 'getSweep' defualts.
+                               "
                                if(validFramesOnly)
                                {
                                     frames <- validFrames
@@ -778,13 +778,13 @@ Track <- setRefClass('Track',
                           sseTrack = function(amplitude=50, phaseShift=0, offset=0, validFramesOnly=FALSE)
                           {
                                "
- 				           #' Calculates the sum square error (i.e., sse) between this track
- 				           #' and a sweep funciton with the given 'amplitude', 'phaseShift',
- 				           #' and 'offset'. The parameter 'validFramesOnly' will limit the
- 				           #' calculation to just the 'validFrames' listed in this Track.
- 				           #' The parameter of 'sin' = T/F, and tAll, fi, and ff are passed
- 				           #' from the track's parent 'TrackList'.
- 				           "
+                               #' Calculates the sum square error (i.e., sse) between this track
+                               #' and a sweep funciton with the given 'amplitude', 'phaseShift',
+                               #' and 'offset'. The parameter 'validFramesOnly' will limit the
+                               #' calculation to just the 'validFrames' listed in this Track.
+                               #' The parameter of 'sin' = T/F, and tAll, fi, and ff are passed
+                               #' from the track's parent 'TrackList'.
+                               "
                                if(validFramesOnly)
                                {
                                     frames <- validFrames
