@@ -6,6 +6,8 @@ library(stats)
 
 ##### Maxima #####
 
+# This is a test
+
 Maxima <- setRefClass("Maxima",
                       fields = list(frame="numeric", points="data.frame"),
                       methods = list(
