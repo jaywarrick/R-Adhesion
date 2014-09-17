@@ -34,14 +34,11 @@ mListCopy$offsetFrames(offset=3991)
 # Now that the cells are tracked, we want to have the data reorganized into a list of tracks (i.e., a TrackList)
 trackList <- mListCopy$getTrackList(sin=FALSE, fi=2, ff=0.01, tAll=seq(0,500,length.out=10001))
 
-# Get rid of short tracks (i.e., cells that are hard too hard to follow for long periods of time like ones that go on and off screen)
+# Get rid of short tracks (i.e., cells that are too hard to follow for long periods of time like ones that go on and off screen)
 trackList$filterTracks(fun = trackLengthFilter, min=50, max=1000000)
 
 # We could get rid of other tracks based on when they start or stop with this filter but for now we'll include all tracks no matter when they start or stop by skipping this step.
 # trackList$filterTracks(fun = trackFrameFilter, startMin=0, startMax=1000000, endMin=maximaList$length()-1, endMax=1000000)
-
-# Plot the tracks to get a sense of things
-trackList$plotTrackList()
 
 # Fit all the data points with a single curve to determine the phaseShift of the cells
 bestFit <- getBulkPhaseShift(trackList)
@@ -61,6 +58,11 @@ trackList$smoothVelocities(fit=bestFit, dist=10, maxWidth=25)
 # 'validEnd' is also a fraction of the same interval. Frames between 'validStart' and 'validEnd' within each interval bounded by changes in flow direction
 # are recorded as being valid.
 trackList$setValidFrames(fit=bestFit, validStart=0.15, validEnd=0.9)
+
+# Plot the tracks to get a sense of things
+trackList$plotTrackList(ylim=c(-150,150), validOnly=TRUE)
+fitCurveData <- getSweep(amplitude=bestFit$par[['amplitude']], phaseShift=bestFit$par[['phaseShift']], offset=0, sin=trackList$sin, fi=trackList$fi, ff=trackList$ff, tAll=trackList$tAll, frames=-1, guess=NULL)
+lines(fitCurveData$t, fitCurveData$v, col='blue')
 
 # Get and plot the percent of cells adhered over time
 results = trackList$getPercentAdhered(velocityThreshold=3)
