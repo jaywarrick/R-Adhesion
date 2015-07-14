@@ -30,7 +30,7 @@ Maxima <- setRefClass("Maxima",
                                           y <- append(y, as.numeric(nums[2]))
                                           index <- append(index,as.numeric(nums[3]))
                                      }
-
+                                     
                                      points <<- data.frame(id=index, x=x, y=y)
                                 }
                                 else
@@ -104,12 +104,29 @@ MaximaList <- setRefClass('MaximaList',
                                     {
                                          maxima <<- list()
                                     }
-
+                                    
                                     maxID <<- -1 # Used for appending maxima
+                               },
+                               getIndexOfFrame = function(frame)
+                               {
+                                    return(which(names(maxima)==as.character(frame)))
+                               },
+                               getMaximaAtIndex = function(index)
+                               {
+                                    return(maxima[[index]])
                                },
                                getMaxima = function(frame)
                                {
                                     return(maxima[[as.character(frame)]])
+                               },
+                               getPreviousMaxima = function(frame)
+                               {
+                                    toGet <- getIndexOfFrame(frame)
+                                    if(is.null(toGet) || toGet <= 1)
+                                    {
+                                         return(NULL)
+                                    }
+                                    return(maxima[[toGet-1]])
                                },
                                setMaxima = function(newMaxima)
                                {
@@ -121,14 +138,18 @@ MaximaList <- setRefClass('MaximaList',
                                },
                                trackBack = function(startFrame, endFrame, maxDist=150, direction=c(1,0,0), directionality=10, uniformityDistThresh=3, digits=1)
                                {
-                                    if(startFrame >= length() | startFrame < 0 | endFrame >= length() | endFrame >= startFrame | endFrame < 0)
+                                    if(is.null(getIndexOfFrame(startFrame)) || is.null(getIndexOfFrame(endFrame)))
+                                    {
+                                         stop("Start frame or end frame is not a valid frame in the maxima list.")
+                                    }
+                                    if(getIndexOfFrame(startFrame) > length() | getIndexOfFrame(startFrame) < 0 | getIndexOfFrame(endFrame) > length() | endFrame >= startFrame | getIndexOfFrame(endFrame) < 0)
                                     {
                                          stop("Start frame or end frame out of bounds. Start frame must be >=0 and > (yes >) end frame because we work backward. End frame must be < last frame of data set.")
                                     }
                                     trackBackStart <<- startFrame
                                     trackBackEnd <<- endFrame
                                     currentMaxima <- getMaxima(startFrame)
-                                    previousMaxima <- getMaxima(startFrame-1)
+                                    previousMaxima <- getPreviousMaxima(startFrame)
                                     maxID <<- max(currentMaxima$points$id)
                                     while(!is.null(previousMaxima) && previousMaxima$frame >= endFrame)
                                     {
@@ -168,7 +189,7 @@ MaximaList <- setRefClass('MaximaList',
                                          }
                                          setMaxima(newMaxima)
                                          currentMaxima <- newMaxima
-                                         previousMaxima <- getMaxima(newMaxima$frame - 1)
+                                         previousMaxima <- getPreviousMaxima(newMaxima$frame)
                                     }
                                     cat("Done tracking. Trimming Data to start and end frame")
                                     allFrameNames <- as.numeric(names(maxima))
@@ -179,11 +200,11 @@ MaximaList <- setRefClass('MaximaList',
                                {
                                     if(frameRange[1] < 0 | frameRange[2] > trackBackStart | frameRange[2] < frameRange[1])
                                     {
-                                         exportFrames <- trackBackEnd:trackBackStart
+                                         exportFrames <- names(maxima)[names(maxima) %in% as.character(trackBackEnd:trackBackStart)]
                                     }
                                     else
                                     {
-                                         exportFrames <- frameRange[1]:frameRange[2]
+                                         exportFrames <- names(maxima)[names(maxima) %in% as.character(frameRange[1]:frameRange[2])]
                                     }
                                     trackList <- new('TrackList', sin=sin, fi=fi, ff=ff, tAll=tAll)
                                     count = 0
@@ -218,7 +239,7 @@ MaximaList <- setRefClass('MaximaList',
                                     setwd(path)
                                     xlim <- base::range(unlist(getProp(fun=function(.maxima){return(base::range(.maxima$points$x))})))
                                     ylim <- base::range(unlist(getProp(fun=function(.maxima){return(base::range(.maxima$points$y))})))
-
+                                    
                                     makeThePlots <- function()
                                     {
                                          for(.maxima in maxima)
@@ -229,7 +250,7 @@ MaximaList <- setRefClass('MaximaList',
                                               dev.off()
                                          }
                                     }
-
+                                    
                                     tryCatch(expr=makeThePlots(), finally=setwd(wd))
                                },
                                offsetFrames = function(offset=0)
@@ -255,7 +276,7 @@ TrackList <- setRefClass('TrackList',
                                    require(foreign)
                                    tracksFile <- read.arff(file)
                                    tracksFile2 <- reorganizeTable(tracksFile, nameCol='Metadata')
-
+                                   
                                    for(row in 1:nrow(tracksFile2))
                                    {
                                         id <- tracksFile2[row,'Track']
@@ -280,12 +301,12 @@ TrackList <- setRefClass('TrackList',
                                    xRanges <- matrix(unlist(xRanges), ncol=2, byrow=TRUE)
                                    yRanges <- getProp(fun=function(track){track$range(slot)})
                                    yRanges <- matrix(unlist(yRanges), ncol=2, byrow=TRUE)
-
+                                   
                                    Xmin <- min(xRanges[,1], na.rm=TRUE)
                                    Xmax <- max(xRanges[,2], na.rm=TRUE)
                                    Ymin <- min(yRanges[,1], na.rm=TRUE)
                                    Ymax <- max(yRanges[,2], na.rm=TRUE)
-
+                                   
                                    args <- list(...)
                                    if(is.null(args$xlim))
                                    {
@@ -409,7 +430,7 @@ TrackList <- setRefClass('TrackList',
                                    #' frame numbers are columns. Use the matrix form of TrackList to do
                                    #' bulk operations such as determining the sse of all the data to a
                                    #' single curve.
-                                   frames <- (1:base::length(tAll))-1
+                                   frames <- (1:base::length(tAll))-1 # Assumption that frames starts at 0
                                    ids <- names(tracks)
                                    data <- matrix(NA, base::length(ids), base::length(frames), dimnames=list(id=names(tracks), frame=as.character(frames)))
                                    if(validOnly)
@@ -426,7 +447,7 @@ TrackList <- setRefClass('TrackList',
                                              data[as.character(track$id), (track$points$frame + 1)] <- track$points[,slot]
                                         }
                                    }
-
+                                   
                                    return(data)
                               },
                               setValidFrames = function(fit, validStart=0.1, validEnd=0.99)
@@ -451,7 +472,7 @@ TrackList <- setRefClass('TrackList',
                                    #'
                                    #' We use 'inflectionPtsToFilter' of c(1,3) to mark the points at which the flow switches direction
                                    "
-
+                                   
                                    # Helper function: get data points adjacent to specified inflection timepoint
                                    getNearests <- function(t, inflectionPoint)
                                    {
@@ -463,7 +484,7 @@ TrackList <- setRefClass('TrackList',
                                         lower <- upper - 1
                                         return(c(lower, upper))
                                    }
-
+                                   
                                    sweep <- getSweep(amplitude=fit$par['amplitude'], phaseShift=fit$par['phaseShift'], offset=0, sin=sin, fi=fi, ff=ff, tAll=tAll, frames=-1, guess=NULL)
                                    inflectionsToAddress <- sweep$inflectionNums %in% c(1,3) # These are times at which flow switches directions
                                    indicesToRemove <- numeric(0)
@@ -477,16 +498,16 @@ TrackList <- setRefClass('TrackList',
                                    }
                                    validFrames0 <- c(1:base::length(tAll)) - 1
                                    validFrames0 <- validFrames0[-indicesToRemove]
-
+                                   
                                    validFrames1 <- numeric(0)
                                    for(tIndex in 1:base::length(tAll))
                                    {
                                         # Get the nearest inflection at or beyond this time
-
+                                        
                                         temp <- which((sweep$inflections >= tAll[tIndex]) & inflectionsToAddress)
                                         infIndex <- temp[1]
                                         if(is.na(infIndex)) next
-
+                                        
                                         # Get the bounding inflections that represent changes in fluid direction
                                         infT2 <- sweep$inflections[infIndex] # take the inflection we found
                                         if((infIndex-2) < 1)
@@ -498,7 +519,7 @@ TrackList <- setRefClass('TrackList',
                                              infT1 <- sweep$inflections[infIndex-2] # also take two inflections prior because each inflection represents pi/2 and we want to go back to the last change in direction which is pi ago.
                                         }
                                         dInfT <- infT2-infT1 # define the time interval size between these two inflections
-
+                                        
                                         # Within the if statement calculate the fractional location of this time index in the interval between the two inflections.
                                         if( (tAll[tIndex] >= (infT1 + validStart*dInfT)) & (tAll[tIndex] <= (infT1 + validEnd*dInfT)) )
                                         {
@@ -506,9 +527,9 @@ TrackList <- setRefClass('TrackList',
                                              validFrames1 <- c(validFrames1, tIndex-1) # (tIndex-1) = frame because frames are indicies that start at 0
                                         }
                                    }
-
+                                   
                                    validFrames <<- sort(intersect(validFrames1, validFrames0))
-
+                                   
                                    for(track in tracks)
                                    {
                                         track$setValidFrames(validFrames)
@@ -599,9 +620,9 @@ Track <- setRefClass('Track',
                                #' a data.frame field called points.
                                #' 'validOnly' indicates whether to return values for the validFrames only or all frames
                                "
-
+                               
                                validIndices <- points$frame %in% validFrames
-
+                               
                                if(rel)
                                {
                                     temp <- points[,slot] - mean(points[,slot])
@@ -836,7 +857,7 @@ reorganizeTable <- function(data, baseName=NA, convertToNumeric=TRUE, nameCol='M
                newColName <- paste(baseName,'.',m, sep='')
                newColName <- gsub(' ','.',newColName, fixed=TRUE) # Get rid of extraneous spaces
           }
-
+          
           temp <- data[data[,nameCol]==m,]
           temp2 <- temp[,c(idCols,valueCol)]
           names(temp2)[names(temp2)==valueCol] <- newColName
@@ -848,7 +869,7 @@ reorganizeTable <- function(data, baseName=NA, convertToNumeric=TRUE, nameCol='M
                newData <- merge(newData, temp2, by=idCols)
           }
      }
-
+     
      if(convertToNumeric)
      {
           for(n in idCols)
@@ -856,7 +877,7 @@ reorganizeTable <- function(data, baseName=NA, convertToNumeric=TRUE, nameCol='M
                newData[,n] <- as.numeric(as.character(newData[,n]))
           }
      }
-
+     
      return(newData)
 }
 
@@ -961,7 +982,7 @@ trackFrameFilter <- function(track, startMin=0, startMax=1000000, endMin=0, endM
 {
      startFrame <- first(track$points$frame)
      endFrame <- last(track$points$frame)
-
+     
      if(startFrame >= startMin & startFrame <= startMax & endFrame >= endMin & endFrame <= endMax)
      {
           return(TRUE)
@@ -985,7 +1006,7 @@ getSweep <- function(amplitude=1, phaseShift=0, offset=0, sin=FALSE, fi=2, ff=0.
      tf <- last(t)
      N <- log(ff/fi)/log(2)
      R <- N / (tf-ti)
-
+     
      if(is.null(guess))
      {
           A <- amplitude
@@ -998,7 +1019,7 @@ getSweep <- function(amplitude=1, phaseShift=0, offset=0, sin=FALSE, fi=2, ff=0.
           phi <- guess['phaseShift']
           b <- guess['offset']
      }
-
+     
      ### Create "saw-tooth" version ###
      # line essentially means position. With a triangular waveform, the velocity equals 4*A*f(t) because in a single cycle, the position of a particle travels a total distance of 4*A.
      # If we integrate the velocity, we get the position (i.e., line), we shift this line by a phase shift described below.
@@ -1015,7 +1036,7 @@ getSweep <- function(amplitude=1, phaseShift=0, offset=0, sin=FALSE, fi=2, ff=0.
           line <- 4*A*fi*(  ((ff/fi)^(tAll/tf)*tf)/log(ff/fi)-tf/log(ff/fi)  ) - A*(phi/(pi/2)) # the last term shifts the line up and down, essentially dictating where the "sections" of the line are placed (i.e., the initial phase of the triangle wave)
           line1 <- 4*1*fi*(  ((ff/fi)^(tAll/tf)*tf)/log(ff/fi)-tf/log(ff/fi)  ) - 1*(phi/(pi/2)) # WITH DUMMY AMPLITUDE OF 1 in case A is 0 then we have something to calculate sections with that isn't a simple flat line
      }
-
+     
      if(A == 0)
      {
           x <- b + line # Flatline
@@ -1029,9 +1050,9 @@ getSweep <- function(amplitude=1, phaseShift=0, offset=0, sin=FALSE, fi=2, ff=0.
      x[sections==1] <- -1*(x[sections==1]-A)
      x[sections==2] <- -1*(x[sections==2])
      x[sections==3] <- (x[sections==3]-A)
-
+     
      # Find pi/2 intervals on frequency sweep
-
+     
      offsetInflections <- (  (-1*(phi/(pi/2))) %/% 1  )
      ni <- seq(0,1000,1) + offsetInflections
      suppressWarnings(inflections <- (log((log(ff/fi)*phi)/(2*fi*pi*tf)+(log(ff/fi)*ni)/(4*fi*tf)+1)*tf)/log(ff/fi))
@@ -1046,9 +1067,9 @@ getSweep <- function(amplitude=1, phaseShift=0, offset=0, sin=FALSE, fi=2, ff=0.
      }
      inflections <- inflections[startTimeI:endTimeI]
      inflectionNums <- inflectionNums[startTimeI:endTimeI]
-
+     
      predicted <- A*sin(2*pi*((fi*(-1+2^(R*tAll)))/(R*log(2))) - phi) + b
-
+     
      #browser()
      #print((-A*(phi/(pi/2))) %/%A %% 4)
      if(sin)
@@ -1067,10 +1088,10 @@ sseBulk <- function(trackList, trackMatrix, amplitude=50, phaseShift=0)
 {
      # Cols are frames, rows are track ids
      # we pass the 'trackMatrix' so we don't have to obtain it each iteration
-
+     
      # get the sweep (for this we need the 'trackList')
      sweep <- getSweep(amplitude=amplitude, phaseShift=phaseShift, offset=0, sin=trackList$sin, fi=trackList$fi, ff=trackList$ff, tAll=trackList$tAll, frames=-1, guess=NULL)
-
+     
      # For each index in tAll (i.e., for each frame)
      sse <- sum((t(trackMatrix)-sweep$v)^2, na.rm=TRUE) # Do the transpose because the subtract function typically makes the subtracted vector vertical
      cat("(", amplitude, ",", phaseShift, ") = ", sse, "\n", sep="")
