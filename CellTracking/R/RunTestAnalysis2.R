@@ -36,7 +36,7 @@ mListCopy <- maximaList$copy()
 # Track the cells, backward in time starting at the frame called "startFrame" (latest frame) and ending at "endFrame" (the earliest frame)
 # FYI Frame numbers START AT 0 while in R indices START AT 1.
 # mListCopy$trackBack(startFrame=5000, endFrame=4600, maxDist=150, direction=c(1,0,0), directionality=10, uniformityDistThresh=2, digits=1)
-mListCopy$trackBack(startFrame=max(as.numeric(names(maximaList$maxima))), endFrame=5, maxDist=150, direction=c(1,0,0), directionality=10, uniformityDistThresh=2, digits=1)
+mListCopy$trackBack(startFrame=max(as.numeric(names(maximaList$maxima))), endFrame=1, maxDist=150, direction=c(1,0,0), directionality=10, uniformityDistThresh=2, digits=1)
 
 # Plot all the maxima to pdf plots so that you can flip through pdfs and see where cells are when (good for trouble shooting but not necessary)
 # mListCopy$generateMaximaPlots(path='~/Documents/MMB/Projects/Adhesion/R/Testing/Plots1')
@@ -60,6 +60,7 @@ trackList$filterTracks(fun = trackLengthFilter, min=50, max=1000000)
 
 # Fit all the data points with a single curve to determine the phaseShift of the cells
 bestFit <- getBulkPhaseShift2(trackList, resolution=0.01)
+bestFit <- getBulkPhaseShift(trackList, tiGuess=0)
 
 # Smooth the velocities (i.e., average over multiple frames) to get a more accurate measure, especially for slow moving cells
 # We need the bestFit information to estimate the speed of cells over time
@@ -84,10 +85,22 @@ trackList$setValidFrames(fit=bestFit, validStart=0.01, validEnd=0.99)
 
 # Plot the tracks to get a sense of things
 trackList$getTrack(1)$plotTrack()
-trackList$plotTrackList(slot='vx', rel=TRUE, ylim=c(-50,50), validOnly=FALSE, xlim=c(175,300))
-fitCurveData <- getSweep(amplitude=bestFit$par[['amplitude']], phaseShift=-1*bestFit$par[['phaseShift']], offset=0, sin=trackList$sin, fi=trackList$fi, ff=trackList$ff, sweepDuration=trackList$sweepDuration, t=trackList$tAll, guess=NULL)
+trackList$plotTrackList(slot='x', rel=TRUE, ylim=c(-250,250), validOnly=FALSE, xlim=c(0,300), ylab='Position [pixels]', xlab='t [s]')
+trackList$plotTrackList(slot='vx', rel=TRUE, ylim=c(-500,500), validOnly=FALSE, xlim=c(0,300), ylab='Velocity [pixels/sec]', xlab='t [s]')
+
+f <- trackList$fi * (trackList$ff/trackList$fi)^(trackList$tAll/trackList$sweepDuration)
+A = 150*(6.45/4)*1e-6
+mu <- 0.00078
+h <- 200e-6
+tau = 8*pi*A*f*mu/h
+plot(trackList$tAll, 10*tau, xlab='t [s]', ylab='Shear Stress [dynes/cm^2]')
+
+fitCurveData <- getSweep(amplitude=bestFit$par[['amplitude']], phaseShift=bestFit$par[['phaseShift']], sweepDuration=(1/bestFit$par[['timeScalingFactor']])*trackList$sweepDuration, offset=0, sin=trackList$sin, ti=bestFit$par[['ti']], fi=trackList$fi, ff=trackList$ff, t=trackList$tAll, guess=NULL)
+trackList$plotTrackList(slot='vx', rel=TRUE, ylim=c(-500,500), validOnly=FALSE, xlim=c(0,5))
+lines(fitCurveData$t, fitCurveData$v, col='red')
+trackList$plotTrackList(slot='vx', rel=TRUE, ylim=c(-50,50), validOnly=FALSE, xlim=c(125,300))
+lines(fitCurveData$t, fitCurveData$v, col='red')
 #fitCurveData <- getSweep(amplitude=150, phaseShift=bestFit$par[['phaseShift']], offset=0, sin=trackList$sin, fi=trackList$fi, ff=trackList$ff, sweepDuration=trackList$sweepDuration, tAll=trackList$tAll, frames=-1, guess=NULL)
-lines(fitCurveData$t, fitCurveData$v, col='red', type='l', xlim=c(175,300))
 
 # Get and plot the percent of cells adhered over time
 results = trackList$getPercentAdhered(velocityThreshold=5)

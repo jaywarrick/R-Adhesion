@@ -69,12 +69,13 @@ reorganizeTable <- function(data, baseName=NA, convertToNumeric=TRUE, nameCol='M
 #' @param ff numeric final frequency of the sweep
 #' @param sweepDurtion numeric
 #' @param tAll numeric vector All possible times for this
-getSweep <- function(amplitude=1, phaseShift=0, offset=0, sin=FALSE, fi=2, ff=0.1, sweepDuration, t, guess=NULL)
+getSweep <- function(amplitude=1, phaseShift=0, offset=0, sin=FALSE, ti=0, fi=2, ff=0.1, sweepDuration=300, t=seq(0,300,0.05), guess=NULL)
 {
-     ti <- 0
+     tOriginal <- t
+     t <- t-ti
      tf <- sweepDuration
      N <- log(ff/fi)/log(2)
-     R <- N / (tf-ti)
+     R <- N / (sweepDuration) # Usually tf-ti but time adjusting t by ti
 
      if(is.null(guess))
      {
@@ -110,12 +111,12 @@ getSweep <- function(amplitude=1, phaseShift=0, offset=0, sin=FALSE, fi=2, ff=0.
      {
           predicted <- A*sin(2*pi*((fi*(-1+2^(R*t)))/(R*log(2))) - phi) + b
           v=getDerivative(x=predicted, t=t)
-          return(list(A=A, t=t, x=predicted, line=line, v=v, inflections=inflections, inflectionNums=inflectionNums))
+          return(list(A=A, t=tOriginal, x=predicted, v=v, inflections=inflections+ti, inflectionNums=inflectionNums))
      }
      else
      {
           predicted <- (2*A/pi)*asin(sin(2*pi*((fi*(-1+2^(R*t)))/(R*log(2))) - phi)) + b
           v=getDerivative(x=predicted, t=t)
-          return(list(A=A, t=t, x=predicted, line=line, v=v, inflections=inflections, inflectionNums=inflectionNums))
+          return(list(A=A, t=tOriginal, x=predicted, v=v, inflections=inflections+ti, inflectionNums=inflectionNums))
      }
 }
