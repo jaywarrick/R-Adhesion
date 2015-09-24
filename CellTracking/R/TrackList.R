@@ -432,6 +432,7 @@ TrackList <- setRefClass('TrackList',
                                    "
                                    trackMatrix <- getMatrix(slot='vxs', validOnly=TRUE)
                                    ret <- list()
+                                   cellCount <- getCellCount()
                                    frames <- colnames(trackMatrix)
                                    for(frame in frames)
                                    {
@@ -439,7 +440,7 @@ TrackList <- setRefClass('TrackList',
                                         velocities <- abs(velocities[!is.na(velocities)])
                                         if(!isempty(velocities))
                                         {
-                                             adhered <- sum(velocities < velocityThreshold)/base::length(velocities)
+                                             adhered <- sum(velocities < velocityThreshold)/cellCount
                                              ret[[frame]] <- adhered
                                         }
                                         else
@@ -448,8 +449,29 @@ TrackList <- setRefClass('TrackList',
                                         }
                                    }
                                    percents <- 100*as.numeric(ret)
-                                   times <- trackList$tAll[allFrames %in% frames]
+                                   times <- tAll[allFrames %in% frames]
                                    return(data.frame(time=times, percentAdhered=percents))
+                              },
+                              getCellCount = function()
+                              {
+                                   trackMatrix <- getMatrix(slot='vxs', validOnly=TRUE)
+                                   if(base::length(trackMatrix) == 0 || nrow(trackMatrix) == 0)
+                                   {
+                                        return(0)
+                                   }
+                                   else
+                                   {
+                                        ret <- list()
+                                        frames <- colnames(trackMatrix)
+                                        lastFrame <- last(frames)
+                                        return(sum(!is.na(trackMatrix[,lastFrame])))
+                                   }
+                              },
+                              save = function(objectName, file) {
+                                   'Save the current object on the file
+                                   in R external object format.'
+                                   assign(objectName, .self)
+                                   base::save(list=c(objectName), file = file)
                               }
                          )
 )

@@ -13,7 +13,7 @@ getBlockingCost <- function(maxDist)
 }
 
 # REMEMBER TO CHECK AND SEE WHEN THIS IS GETTING CALLED
-# IF AFTER WE SET THRESHOLD, THEN THIS CHANGES WHAT WE THINK 
+# IF AFTER WE SET THRESHOLD, THEN THIS CHANGES WHAT WE THINK
 # ABOUT THE CUTOFF VALUE AND WE CAN POTENTIALLY CHANGE THE FUNCTION
 # TO USE MAXDIST
 getCutoff <- function(UL, blockingCost, factorOverMax=10)
@@ -33,17 +33,17 @@ getLinkMatrix <- function(points, maxDist=15, direction=c(1,0,0), directionality
 {
      t0 <- points$t0
      t1 <- points$t1
-     
+
      # Check inputs
      if(length(direction) < 3 || ncol(t0) < 3 || ncol(t1) < 3)
      {
           print("Invalid arguments to getLinkMatrix function. Returning NULL.")
           return(NULL)
      }
-     
+
      # make sure direction is a unit vector by dividing all components by its magnitude
      direction <- direction/(sqrt(sum(direction^2)))
-     
+
      # need to calculate distance for all combinations of points
      # To do this we replicate the t0 and t1 matrices appropriately and do matrix math
      # Note that t0 and t1 can have different lengths
@@ -51,53 +51,53 @@ getLinkMatrix <- function(points, maxDist=15, direction=c(1,0,0), directionality
      nt1 <- nrow(t1)
      t0Rep <- matrix(rep(t(t0), nt1), ncol=ncol(t0), byrow=TRUE)
      t1Seq <- rep(1:nrow(t1), each=nt0)
-     t1Rep <- t1[t1Seq,]     
-     
+     t1Rep <- t1[t1Seq,]
+
      # Calculate movement vectors for each combination
      movement <- as.matrix(t1Rep-t0Rep)
      parallelMovement <- movement%*%direction # dot product of direction with each row of the movement matrix
      movementSign <- sign(parallelMovement)
      perpendicularMovement2 <- rowSums(movement*movement) - parallelMovement*parallelMovement
-     
+
      # Calculate cost
      cost <- parallelMovement*parallelMovement + ((directionality*directionality)*perpendicularMovement2) # Penalize perpendicular movement in proportion to the expected ratio of motion expected parallel vs perpendicular to the specified direction
      cost[cost >= (maxDist*maxDist)] <- getBlockingCost(maxDist)
      signedCost <- cost*movementSign
      cost <- matrix(cost, nt0, nt1)
      signedCost <- matrix(signedCost, nt0, nt1)
-     
+
      return(list(cost=cost, signedCost=signedCost))
 }
 
 DirectionalLinearAssignment <- function(points, maxDist=10, direction=c(1,0,0), directionality=10, uniformityDistThresh=-1, digits=4)
-{     
+{
      # Do first round of tracking as first guess
      #cat("Getting initial cost matrix\n")
      linkMatrix <- getLinkMatrix(points, maxDist=maxDist, direction=direction, directionality=directionality)
      cost <- getCostMatrix(UL=linkMatrix$cost, digits=digits, maxDist=maxDist)
-     
+
      #cat("Linking (round 1)\n")
      px <- LinearAssignment(cost)
-     
-     # A negative number indicates that we should not  apply uniformity constraint
+
+     # A negative number indicates that we should not apply a uniformity constraint
      if(uniformityDistThresh >= 0)
      {
           uniformityCostThresh <- (directionality*uniformityDistThresh)^2 + uniformityDistThresh^2
-          
+
           #cat("Determining directionality\n")
           diagonal <- 1:length(px)
           # First find valid rows and cols
           nrows <- nrow(points$t0)
           ncols <- nrow(points$t1)
           # Only look at pxs that reference links between t0 and t1 and not broken links
-          validPx <- which(px <= nrows) 
+          validPx <- which(px <= nrows)
           validPx <- validPx[validPx <= ncols] # only care about linked points (this selects valid columns)
           linkedCosts <- numeric(length(validPx))
           for(i in 1:length(validPx))
           {
                linkedCosts[i] <- linkMatrix$signedCost[px[validPx[i]],validPx[i]]
           }
-          
+
           linkedSign <- -1*sign(sum(sign(linkedCosts))) # determine which sign to penalize/remove (i.e., replace with blocking cost)
           if(!is.na(linkedSign)) # this catches condition where there are essentially all blocking costs (i.e., no valid links)
           {
@@ -110,9 +110,9 @@ DirectionalLinearAssignment <- function(points, maxDist=10, direction=c(1,0,0), 
                     linkMatrix$cost[linkMatrix$signedCost < -1*uniformityCostThresh] <- getBlockingCost(maxDist)
                }
           }
-          
+
           cost <- getCostMatrix(UL=linkMatrix$cost, digits=digits, maxDist=maxDist)
-          
+
           #cat("Linking (round 2)\n\n")
           px <- LinearAssignment(cost)
      }
@@ -125,13 +125,13 @@ DirectionalLinearAssignment <- function(points, maxDist=10, direction=c(1,0,0), 
 getURorLL <- function(n, blockingCost, cutoff)
 {
      UR <- matrix(blockingCost, n, n);
-     
+
      # Set the cutoff along the diagonal (top left to bottom right)
      for (i in 1:n)
      {
           UR[i, i] <- cutoff
      }
-     
+
      return(UR);
 }
 
@@ -195,7 +195,7 @@ plotAssignments <- function(points, digits=4, maxDist=0.5, direction=c(1,0,0), d
                lines(c(t0$x[px[i]], t1$x[i]), c(t0$y[px[i]], t1$y[i]))
           }
      }
-     
+
      # Calculate accuracy
      wrongs <- 0
      t0i <- row.names(t0)
@@ -224,23 +224,23 @@ plotAssignments <- function(points, digits=4, maxDist=0.5, direction=c(1,0,0), d
 ##### Point Generation #####
 
 getPoints <- function(n=100, xlim=c(0,1), ylim=c(0,1), zlim=c(0,1), movement=c(0.1,0,0), direction=c(1,0,0), parallelNoise=0.1/4, perpendicularNoise=parallelNoise/10)
-{     
+{
      print('Generating points')
      # Define motions
      vectors <- createMovements(n=n, movement=movement, direction=direction, parallelNoise=parallelNoise, perpendicularNoise=perpendicularNoise)
-     
+
      # Define locations
      a0 <- runif(n, min=xlim[1], max=xlim[2])
      b0 <- runif(n, min=ylim[1], max=ylim[2])
      c0 <- runif(n, min=zlim[1], max=zlim[2])
-     
+
      t0 <- data.frame(x=a0, y=b0, z=c0)
      t1 <- t0 + vectors
-     
+
      # Eliminate z for now by setting all z's to 0
      t0$z <- 0
      t1$z <- 0
-     
+
      # Return
      return(list(t0=t0, t1=t1))
 }
@@ -251,19 +251,19 @@ getRotationMatrix <- function(v1=c(1,0,0), v2=c(1,1,1))
      u1 <- v1/mag1
      mag2 <- sqrt(sum(v2^2))
      u2 <- v2/mag2
-     
+
      if(sum(u1==u2)==3)
      {
           return(diag(1,3,3))
      }
-     
+
      v <- cross(u1, u2)
      sAngle <- sqrt(sum(v*v))
      cAngle <- sum(u1*u2)
      vx <- matrix(c(0, v[3], -v[2], -v[3], 0, v[1], v[2], -v[1], 0), 3, 3)
-     
+
      R <- diag(1,3,3) + vx + (vx%*%vx)*((1-cAngle)/(sAngle^2))
-     
+
      return(R)
 }
 
@@ -281,7 +281,7 @@ createMovements <- function(n, movement, direction=movement, parallelNoise, perp
 
      temp <- rbind(x,y,z)
      R <- getRotationMatrix(v1=c(1,0,0), v2=direction)
-     
+
      # Rotate all the movement to be along the direction supplied in movement
      results <- numeric(0)
      for(i in 1:length(x))
@@ -296,13 +296,13 @@ createMovements <- function(n, movement, direction=movement, parallelNoise, perp
 #      # Do the cost calculation
 #      cost <- getCost(p1, p2)
 #      cutoff <- maxDist*maxDist
-#      
+#
 #      # Apply the threshold linking distance
 #      if (cost > cutoff)
 #      {
 #           return(getBlockingCost(maxDist))
 #      }
-#      
+#
 #      # Apply penalties
 #      penalty <- 1;
 #      for (i in 1:length(p1))
@@ -310,25 +310,25 @@ createMovements <- function(n, movement, direction=movement, parallelNoise, perp
 #           ndiff <- getNormDiff(p1[i], p2[i])
 #           if (is.nan(ndiff))
 #           {
-#                next   
+#                next
 #           }
 #           factor <- penaltyFactors[i]
 #           penalty <- penalty + factor * 1.5 * ndiff
 #      }
-#      
+#
 #      # calculate final total cost (total cost = cost * pentalty^2 = (distance + penalty)^2)
 #      cost <- (cost * penalty * penalty)
-#      
+#
 #      # Apply the threshold linking distance
 #      if (cost > cutoff)
 #      {
 #           return(getBlockingCost(maxDist))
 #      }
-#      
+#
 #      # Return the total cost
 #      return(cost);
 # }
-# 
+#
 # getNormDiff <- function(a, b)
 # {
 #      if ( a == -b )
@@ -378,11 +378,11 @@ testLAPAccuracy_outOfFrame <- function(n=10, mags=seq(0,0.1,length.out=3))
           t1InFrame <- subset(points$t1, x <= 1)
           newPoints <- points
           newPoints$t1 <- t1InFrame
-          
+
           # Track them
           temp1 <- plotAssignments(points=points, digits=4, maxDist=m+2*0.1, direction=c(1,0,0), directionality=10)
           temp2 <- plotAssignments(points=newPoints, digits=4, maxDist=m+2*0.1, direction=c(1,0,0), directionality=10)
-          
+
           # Store the results
           accuracy1 <- c(accuracy1, temp1$errorRate)
           accuracy2 <- c(accuracy2, temp2$errorRate)
@@ -390,7 +390,7 @@ testLAPAccuracy_outOfFrame <- function(n=10, mags=seq(0,0.1,length.out=3))
           print(accuracy1)
           print(accuracy2)
      }
-     
+
      poof <- 100*(oof/n) # Percent Out Of Frame (poof)
      duh2 <- data.frame(poof=poof, allIn=accuracy1, someOut=accuracy2)
      plot(poof, duh2$someOut, ylim=c(0,max(duh2$someOut)), type='l', col='black', main='Tracking Errors', xlab='Percent Out of Frame [%]', ylab='Tracking Error Rate [%]')
@@ -418,7 +418,7 @@ testLAPAccuracy_outOfFrame2 <- function(n=10, mags=seq(0,0.1,length.out=6), dire
           # Track them
           temp1 <- plotAssignments(points=points, digits=4, maxDist=m+2*0.1, direction=c(1,0,0), directionality=10)
           temp2 <- plotAssignments(points=newPoints, digits=4, maxDist=m+2*0.1, direction=c(1,0,0), directionality=10)
-          
+
           # Store the results
           accuracy1 <- c(accuracy1, temp1$errorRate)
           accuracy2 <- c(accuracy2, temp2$errorRate)
@@ -426,7 +426,7 @@ testLAPAccuracy_outOfFrame2 <- function(n=10, mags=seq(0,0.1,length.out=6), dire
           print(accuracy1)
           print(accuracy2)
      }
-     
+
      poof <- 100*(oof/n) # Percent Out Of Frame (poof)
      duh2 <- data.frame(poof=poof, allIn=accuracy1, someOut=accuracy2)
      plot(poof, duh2$someOut, ylim=c(0,max(duh2$someOut)), type='l', col='black', main='Tracking Errors', xlab='Percent Out of Frame [%]', ylab='Tracking Error Rate [%]')
@@ -455,19 +455,19 @@ testLAPAccuracy_outOfFrame3 <- function(n=500, mags=seq(0.1,0.1,length.out=30), 
           t0InFrameRows <- which(points$t0$x >= 0 & points$t0$x <= 1, points$t0$y >= 0 & points$t0$y <= 1)
           completeData <- intersect(t1InFrameRows, t0InFrameRows)
           allData <- union(t1InFrameRows, t0InFrameRows)
-          
+
           fractionOutOfFrame <- (length(allData) - length(completeData))/(length(allData))
           completePoints <- list(t0=points$t0[t0InFrameRows,], t1=points$t1[t0InFrameRows,])
           incompletePoints <- list(t0=points$t0[t0InFrameRows,], t1=points$t1[t1InFrameRows,])
           # Track them
-          
+
           temp1 <- plotAssignments(points=completePoints, digits=4, maxDist=m+2*0.1, direction=c(1,0,0), directionality=1, uniformityDistThresh=-1, silent=silent)
           temp2 <- plotAssignments(points=completePoints, digits=4, maxDist=m+2*0.1, direction=c(1,0,0), directionality=10, uniformityDistThresh=-1, silent=silent)
           temp3 <- plotAssignments(points=completePoints, digits=4, maxDist=m+2*0.1, direction=c(1,0,0), directionality=10, uniformityDistThresh=3*0.1/4, silent=silent)
           temp4 <- plotAssignments(points=incompletePoints, digits=4, maxDist=m+2*0.1, direction=c(1,0,0), directionality=1, uniformityDistThresh=0, silent=silent)
           temp5 <- plotAssignments(points=incompletePoints, digits=4, maxDist=m+2*0.1, direction=c(1,0,0), directionality=10, uniformityDistThresh=-1, silent=silent)
           temp6 <- plotAssignments(points=incompletePoints, digits=4, maxDist=m+2*0.1, direction=c(1,0,0), directionality=10, uniformityDistThresh=3*0.1/4, silent=silent)
-          
+
           # Store the results
           accuracy1 <- c(accuracy1, temp1$errorRate)
           accuracy2 <- c(accuracy2, temp2$errorRate)
@@ -522,7 +522,7 @@ plotMethod <- function(results, name, normalize=FALSE)
      {
           ylim <- c(0, max(results[,c('error1Mean','error2Mean','error3Mean','error4Mean','error5Mean','error6Mean')]))
      }
- 
+
      mags <- unique(results$mag)
      cells <- unique(results$cells)
      plot(x=c(), y=c(), xlim=xlim, ylim=ylim, type='l', xlab='Points Out Of Frame [%]', ylab='Error Rate [%]')

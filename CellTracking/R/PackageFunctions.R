@@ -120,3 +120,15 @@ getSweep <- function(amplitude=1, phaseShift=0, offset=0, sin=FALSE, ti=0, fi=2,
           return(list(A=A, t=tOriginal, x=predicted, v=v, inflections=inflections+ti, inflectionNums=inflectionNums))
      }
 }
+
+getFrequencies <- function(t=seq(0,300,0.035), fi=1, ff=0.01, duration=300)
+{
+     return(data.frame(t=t, f=fi*(ff/fi)^(t/duration)))
+}
+
+getShearStress <- function(f, pixelAmplitude, h=200e-6, mu=0.00078, mag=4)
+{
+     micronAmplitude <- (6.45e-6/mag)*pixelAmplitude
+     uMax <- 4*micronAmplitude*f
+     return((2/3)*uMax*(6*mu)/h)
+}

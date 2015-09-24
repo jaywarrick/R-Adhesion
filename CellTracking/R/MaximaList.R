@@ -12,11 +12,18 @@ MaximaList <- setRefClass('MaximaList',
                                     "
                                     #' Initialize with a file (eg., .jxd ROI file from JEX) that stores all the point sets as semicolon separated comma separated point information (see Maxima documentation).
                                     "
+                                    maximaFile <- read.arff(path)
+                                    initializeWithROIDataFrame(roiTable=maximaFile, timeDimName=timeDimName)
+                               },
+                               initializeWithROIDataFrame = function(roiTable, timeDimName='Time')
+                               {
+                                    "
+                                    #' Initialize with a data.frame of an ROI (eg., .jxd ROI file from JEX) that stores all the point sets as semicolon separated comma separated point information (see Maxima documentation).
+                                    "
                                     require(foreign)
-                                    if(!is.null(path))
+                                    if(!is.null(roiTable))
                                     {
-                                         maximaFile <- read.arff(path)
-                                         maximaFile2 <- reorganizeTable(maximaFile, nameCol='Metadata')
+                                         maximaFile2 <- reorganizeTable(roiTable, nameCol='Metadata')
                                          maximaFile2[,timeDimName] <- as.numeric(as.character(maximaFile2[,timeDimName]))
                                          temp <- list()
                                          for(r in 1:nrow(maximaFile2))
@@ -147,6 +154,18 @@ MaximaList <- setRefClass('MaximaList',
                                },
                                getTrackList = function(sin=FALSE, fi, ff, sweepDuration, t0_Frame=0, timePerFrame=0.035, frameRange=c(0,-1))
                                {
+                                    trackList <- getStandardTrackList(t0_Frame=t0_Frame, timePtimePerFrame=timePerFrame, frameRange=frameRange)
+                                    trackList$sin <- sin
+                                    trackList$fi <- fi
+                                    trackList$ff <- ff
+                                    trackList$sweepDuration <- sweepDuration
+                                    trackList$tAll <- trackList$getTAll()
+                                    trackList$allFrames <- trackList$getAllFrames()
+                                    trackList$calculateVelocities()
+                                    return(trackList)
+                               },
+                               getStandardTrackList = function(t0_Frame=0, timePerFrame=0.035, frameRange=c(0,-1))
+                               {
                                     "
                                     #' Create a TrackList object from this MaximaList object (essentially a list indexed/grouped by cell id instead of time)
                                     "
@@ -158,7 +177,7 @@ MaximaList <- setRefClass('MaximaList',
                                     {
                                          exportFrames <- names(maxima)[names(maxima) %in% as.character(frameRange[1]:frameRange[2])]
                                     }
-                                    trackList <- new('TrackList', sin=sin, fi=fi, ff=ff, sweepDuration=sweepDuration, t0_Frame=t0_Frame, timePerFrame=timePerFrame)
+                                    trackList <- new('TrackList', t0_Frame=t0_Frame, timePerFrame=timePerFrame)
                                     count = 0
                                     total = base::length(exportFrames)
                                     for(f in exportFrames)
@@ -172,9 +191,6 @@ MaximaList <- setRefClass('MaximaList',
                                          count <- count + 1
                                          cat("Generating TrackList: ", round(100*count/total, digits=2), "%\n", sep="")
                                     }
-                                    trackList$tAll <- trackList$getTAll()
-                                    trackList$allFrames <- trackList$getAllFrames()
-                                    trackList$calculateVelocities()
                                     return(trackList)
                                },
                                getProp = function(fun=function(.maxima){return(base::range(.maxima$points$x))})
