@@ -40,8 +40,8 @@ TrackList <- setRefClass('TrackList',
                               setStandardMeta = function(t0_Frame=t0_Frame, timePerFrame=timePerFrame)
                               {
                                    meta <<- list()
-                                   meta$t0_Frame <<- t0_Frame
-                                   meta$timePerFrame <<- timePerFrame
+                                   meta$t0_Frame <- t0_Frame
+                                   meta$timePerFrame <- timePerFrame
                                    calculateAllFrames()
                                    calculateTAll()
                                    calculateVelocities()
@@ -60,12 +60,12 @@ TrackList <- setRefClass('TrackList',
                                    #' The phase shift is not set here as that is determined using the getBulkPhaseShift method
                                    "
                                    meta <<- list()
-                                   meta$sin <<- sin
-                                   meta$fi <<- fi
-                                   meta$ff <<- ff
-                                   meta$t0_Frame <<- t0_Frame
-                                   meta$timePerFrame <<- timePerFrame
-                                   meta$sweepDuration <<- sweepDuration
+                                   meta$sin <- sin
+                                   meta$fi <- fi
+                                   meta$ff <- ff
+                                   meta$t0_Frame <- t0_Frame
+                                   meta$timePerFrame <- timePerFrame
+                                   meta$sweepDuration <- sweepDuration
                                    calculateAllFrames()
                                    calculateTAll()
                                    calculateVelocities()
@@ -202,7 +202,7 @@ TrackList <- setRefClass('TrackList',
                                    {
                                         possibleFrames <- c(possibleFrames, .track$getSlot('frame'))
                                    }
-                                   meta$allFrames <<- sort(unique(possibleFrames))
+                                   meta$allFrames <- sort(unique(possibleFrames))
                               },
                               calculateTAll = function()
                               {
@@ -210,7 +210,7 @@ TrackList <- setRefClass('TrackList',
                                    #' @return The times associated with each frame that exists within the TrackList
                                    "
                                    print('Calculating times for all frames in TrackList')
-                                   meta$tAll <<- (meta$allFrames - meta$t0_Frame) * meta$timePerFrame
+                                   meta$tAll <- (meta$allFrames - meta$t0_Frame) * meta$timePerFrame
                               },
                               calculateVelocities = function()
                               {
@@ -427,7 +427,7 @@ TrackList <- setRefClass('TrackList',
                                         }
                                    }
 
-                                   meta$validFrames <<- sort(intersect(validFrames1, validFrames0))
+                                   meta$validFrames <- sort(intersect(validFrames1, validFrames0))
 
                                    for(track in tracks)
                                    {
