@@ -2,9 +2,9 @@
 #' @field id numeric ID of the particle being tracked
 #' @field points data.frame table of x, y, t, frame, vx, vy and optionally smoothed versions of vx and vy called vxs and vys (see method smoothVelocities)
 #' @field validFrames numeric vector Vector frame numbers of the track that are set to 'valid' using 'setValidFrames' method
-#' @field .parent TrackList The parent TrackList object of this Track object
+#' @field meta TrackList information from the parent TrackList object of this Track object
 Track <- setRefClass('Track',
-                     fields = list(id='numeric', points='data.frame', validFrames='numeric', .parent='TrackList'),
+                     fields = list(id='numeric', points='data.frame', validFrames='numeric', meta='list'),
                      methods = list(
                           initializeWithTrackROI = function(id, start, pattern, t0_Frame, timePerFrame)
                           {
@@ -43,12 +43,16 @@ Track <- setRefClass('Track',
                                     }
                                }
                                id <<- as.numeric(as.character(id))
-                               if(base::length(frames) > base::length(tAll))
-                               {
-                                    stop(cat("Length of tAll seems to short for the data that is being used to initialize the track. frames length = ", base::length(frames), " tAll length = ", base::length(tAll)))
-                               }
+                               #                                if(base::length(frames) > base::length(tAll))
+                               #                                {
+                               #                                     stop(cat("Length of tAll seems to short for the data that is being used to initialize the track. frames length = ", base::length(frames), " tAll length = ", base::length(tAll)))
+                               #                                }
                                points <<- data.frame(frame=frames, x=x, y=y, t=(frames - t0_Frame) * timePerFrame)
                                calculateVelocities()
+                          },
+                          setMeta = function(meta)
+                          {
+                               meta <<- meta
                           },
                           length = function()
                           {
@@ -209,33 +213,33 @@ Track <- setRefClass('Track',
                                "
                                points <<- rbind(points, data.frame(x=x, y=y, t=t, frame=frame))
                           },
-                          show = function()
-                          {
-                               "
-                               #' Prints the information of this object to the command line
-                               #' output. This overrides the basic 'show' method as a track
-                               #' carries a reference to its parent trackList (if it has been
-                               #' added to a trackList using the 'setTrack' method) which
-                               #' results in recursive printing of TrackList information
-                               #' because a 'show' for 'TrackList' calls 'show' on each 'Track'.
-                               #' This method eliminates this issue.
-                               "
-                               cat("Reference class object of class 'Track'\n")
-                               for(name in names(Track$fields()))
-                               {
-                                    if(name %in% c('.parent'))#c('x','y','t','vx','vy')))
-                                    {
-                                         cat("Field '", name, "':\n", sep='')
-                                         cat("(can't print... recursive)\n")
-                                    }
-                                    else
-                                    {
-                                         cat("Field '", name, "':\n", sep='')
-                                         methods::show(.self[[name]])
-                                    }
-                               }
-                               cat("\n")
-                          },
+                          #                           show = function()
+                          #                           {
+                          #                                "
+                          #                                #' Prints the information of this object to the command line
+                          #                                #' output. This overrides the basic 'show' method as a track
+                          #                                #' carries a reference to its parent trackList (if it has been
+                          #                                #' added to a trackList using the 'setTrack' method) which
+                          #                                #' results in recursive printing of TrackList information
+                          #                                #' because a 'show' for 'TrackList' calls 'show' on each 'Track'.
+                          #                                #' This method eliminates this issue.
+                          #                                "
+                          #                                cat("Reference class object of class 'Track'\n")
+                          #                                for(name in names(Track$fields()))
+                          #                                {
+                          #                                     if(name %in% c('meta'))#c('x','y','t','vx','vy')))
+                          #                                     {
+                          #                                          cat("Field '", name, "':\n", sep='')
+                          #                                          cat("(can't print... recursive)\n")
+                          #                                     }
+                          #                                     else
+                          #                                     {
+                          #                                          cat("Field '", name, "':\n", sep='')
+                          #                                          methods::show(.self[[name]])
+                          #                                     }
+                          #                                }
+                          #                                cat("\n")
+                          #                           },
                           setValidFrames = function(frames)
                           {
                                "
@@ -265,7 +269,7 @@ Track <- setRefClass('Track',
                                {
                                     frames <- points$frame
                                }
-                               args <- list(sin=.parent$sin, fi=.parent$fi, ff=.parent$ff, tAll=.parent$tAll, phaseShift=.parent$phaseShift, amplitude=amplitude, offset=offset, frames=frames, guess=guess)
+                               args <- list(sin=meta$sin, fi=meta$fi, ff=meta$ff, tAll=meta$tAll, phaseShift=meta$phaseShift, amplitude=amplitude, offset=offset, frames=frames, guess=guess)
                                args <- args[!isempty(args)]
                                return(do.call(getSweep, args))
                           },
@@ -287,7 +291,7 @@ Track <- setRefClass('Track',
                                {
                                     frames <- points$frame
                                }
-                               args <- list(sin=.parent$sin, fi=.parent$fi, ff=.parent$ff, tAll=.parent$tAll, amplitude=amplitude, offset=offset, frames=frames)
+                               args <- list(sin=meta$sin, fi=meta$fi, ff=meta$ff, tAll=meta$tAll, amplitude=amplitude, offset=offset, frames=frames)
                                args <- args[!isempty(args)]
                                predicted <- do.call(getSweep, args)
                                data <- object$points$vx                ### Explicitly fitting vx ###

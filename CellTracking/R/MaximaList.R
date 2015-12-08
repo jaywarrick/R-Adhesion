@@ -154,7 +154,7 @@ MaximaList <- setRefClass('MaximaList',
                                },
                                getTrackList = function(sin=FALSE, fi, ff, sweepDuration, t0_Frame=0, timePerFrame=0.035, frameRange=c(0,-1))
                                {
-                                    trackList <- getStandardTrackList(t0_Frame=t0_Frame, timePtimePerFrame=timePerFrame, frameRange=frameRange)
+                                    trackList <- getStandardTrackList(t0_Frame=t0_Frame, timePerFrame=timePerFrame, frameRange=frameRange)
                                     trackList$sin <- sin
                                     trackList$fi <- fi
                                     trackList$ff <- ff
