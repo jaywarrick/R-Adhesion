@@ -1,5 +1,5 @@
 # Clear the workspace of any data, variables, and functions that are currently loaded.
-#rm(list=ls())
+rm(list=ls())
 
 #source("http://bioconductor.org/biocLite.R")
 #biocLite('GraphAlignment')
@@ -11,19 +11,25 @@ source('~/Public/DropBox/GitHub/R-Adhesion/CellTracking/R/LAPJV.R')
 source('~/Public/DropBox/GitHub/R-Adhesion/CellTracking/R/Tracking.R')
 source('~/Public/DropBox/GitHub/R-Adhesion/CellTracking/R/TrackList.R')
 source('~/Public/DropBox/GitHub/R-Adhesion/CellTracking/R/Track.R')
-source('~/Public/DropBox/GitHub/R-Adhesion/CellTracking/R/TrackList.R')
-source('~/Public/DropBox/GitHub/R-Adhesion/CellTracking/R/Track.R')
 source('~/Public/DropBox/GitHub/R-Adhesion/CellTracking/R/Maxima.R')
 source('~/Public/DropBox/GitHub/R-Adhesion/CellTracking/R/MaximaList.R')
 source('~/Public/DropBox/GitHub/R-Adhesion/CellTracking/R/TrackFilters.R')
 source('~/Public/DropBox/GitHub/R-Adhesion/CellTracking/R/TrackFitting.R')
 source('~/Public/DropBox/GitHub/R-Adhesion/CellTracking/R/PackageFunctions.R')
 
-setwd('~/Public/DropBox/GitHub/R-Adhesion/CellTracking/R/Test')
 
-#well <- 'x0_y8'
 
-#path <- '/Users/jaywarrick/Documents/MMB/Projects/Adhesion/MM AMD/'
+mainDir <- '~/Public/DropBox/GitHub/R-Adhesion/CellTracking/Results'
+dir.create(file.path(mainDir), showWarnings = FALSE)
+
+well <- 'x0_y8'
+
+dir.create(file.path(mainDir, well), showWarnings = FALSE)
+setwd(file.path(mainDir, well))
+
+setwd('~/Public/DropBox/GitHub/R-Adhesion/CellTracking/R/Results')
+
+path <- '/Users/jaywarrick/Documents/MMB/Projects/Adhesion/MM AMD/20150724/'
 
 # Create a MaximaList object to help us with a bunch of stuff
 maximaList <- new('MaximaList')
@@ -44,14 +50,21 @@ mListCopy$trackBack(startFrame=max(as.numeric(names(maximaList$maxima))), endFra
 
 # Plot all the maxima to pdf plots so that you can flip through pdfs and see where cells are when (good for trouble shooting but not necessary)
 # mListCopy$generateMaximaPlots(path='~/Documents/MMB/Projects/Adhesion/R/Testing/Plots1')
-mListCopy$generateMaximaPlots(path='~/Public/DropBox/GitHub/R-Adhesion/CellTracking/Plots')
+mListCopy$generateMaximaPlots(path=file.path('~/Public/DropBox/GitHub/R-Adhesion/CellTracking/Plots',well))
 
 # Offset frames to actual start frame of the imported dataset.
 # Don't need to for this set...
 # mListCopy$offsetFrames(offset=3991)
 
+# Do this if you need to refresh the class definition
+#mListCopy <- mListCopy$copy()
+
 # Now that the cells are tracked, we want to have the data reorganized into a list of tracks (i.e., a TrackList)
 trackList <- mListCopy$getTrackList(sin=FALSE, fi=1, ff=0.01, sweepDuration=300, t0_Frame=0, timePerFrame=0.035)
+
+tListCopy <- trackList$copy()
+#trackList <- trackList$copy()
+#trackList<- tListCopy
 
 # Get rid of short tracks (i.e., cells that are too hard to follow for long periods of time like ones that go on and off screen)
 trackList$filterTracks(fun = trackLengthFilter, min=20, max=1000000)
@@ -59,12 +72,17 @@ trackList$filterTracks(fun = trackLengthFilter, min=20, max=1000000)
 # We could get rid of other tracks based on when they start or stop with this filter but for now we'll include all tracks no matter when they start or stop by skipping this step.
 # trackList$filterTracks(fun = trackFrameFilter, startMin=0, startMax=1000000, endMin=maximaList$length()-1, endMax=1000000)
 
+save(list=c('maximaList','mListCopy','trackList','tListCopy'), file='/Users/jaywarrick/Public/DropBox/GitHub/R-Adhesion/CellTracking/Temp.RData')
 # Load from a saved thingy
-#load('/Users/jaywarrick/Public/DropBox/GitHub/R-Adhesion/CellTracking/CellTracking.RData')
+load('/Users/jaywarrick/Public/DropBox/GitHub/R-Adhesion/CellTracking/Temp.RData', verbose=TRUE)
+maximaList <- maximaList$copy()
+mListCopy <- mListCopy$copy()
+trackList <- trackList$copy()
+tListCopy <- tListCopy$copy()
 
 # Fit all the data points with a single curve to determine the phaseShift of the cells
 #bestFit <- getBulkPhaseShift2(trackList, tiGuess=0)
-bestFit <- getBulkPhaseShift(trackList, tiGuess=0)
+bestFit <- getBulkPhaseShiftGS(trackList, cores=4)
 
 # Smooth the velocities (i.e., average over multiple frames) to get a more accurate measure, especially for slow moving cells
 # We need the bestFit information to estimate the speed of cells over time
@@ -80,7 +98,7 @@ trackList$smoothVelocities(fit=bestFit, dist=10, maxWidth=15)
 # fraction of the interval between changed in flow direction (i.e., validStart=0.1 says to wait 10% of the time between direction changes to mark time frames as valid)
 # 'validEnd' is also a fraction of the same interval. Frames between 'validStart' and 'validEnd' within each interval bounded by changes in flow direction
 # are recorded as being valid.
-trackList$setValidFrames(fit=bestFit, validStart=0.1, validEnd=0.9)
+trackList$setValidFrames(fit=bestFit, validStart=0.2, validEnd=0.8)
 
 # update the trackList upon editing a method
 #trackList <- TrackList$new( trackList )
@@ -100,18 +118,18 @@ trackList$plotTrackList(slot='vx', rel=TRUE, ylim=c(-500,500), validOnly=FALSE, 
 # plot(trackList$tAll, 10*tau, xlab='t [s]', ylab='Shear Stress [dynes/cm^2]')
 
 fitCurveData <- getSweep(amplitude=bestFit$par[['amplitude']], phaseShift=bestFit$par[['phaseShift']], sweepDuration=(1/bestFit$par[['timeScalingFactor']])*trackList$sweepDuration, offset=0, sin=trackList$sin, ti=bestFit$par[['ti']], fi=trackList$fi, ff=trackList$ff, t=trackList$tAll, guess=NULL)
-trackList$plotTrackList(slot='vx', rel=TRUE, ylim=c(-500,500), validOnly=FALSE, xlim=c(0,5))
+trackList$plotTrackList(slot='vx', ylim=c(-500,500), rel=FALSE, validOnly=FALSE, xlim=c(0,5))
 lines(fitCurveData$t, fitCurveData$v, col='red')
-trackList$plotTrackList(slot='vx', rel=TRUE, ylim=c(-50,50), validOnly=FALSE, xlim=c(125,300))
+trackList$plotTrackList(slot='vx', rel=FALSE, ylim=c(-50,50), validOnly=FALSE, xlim=c(125,300))
 lines(fitCurveData$t, fitCurveData$v, col='red')
-trackList$plotTrackList(slot='vx', rel=TRUE, ylim=c(-500,500), validOnly=FALSE, xlim=c(0,300))
+trackList$plotTrackList(slot='vx', rel=FALSE, ylim=c(-500,500), validOnly=FALSE, xlim=c(0,300))
 lines(fitCurveData$t, fitCurveData$v, col='red')
 #fitCurveData <- getSweep(amplitude=150, phaseShift=bestFit$par[['phaseShift']], offset=0, sin=trackList$sin, fi=trackList$fi, ff=trackList$ff, sweepDuration=trackList$sweepDuration, tAll=trackList$tAll, frames=-1, guess=NULL)
 
 # Get and plot the percent of cells adhered over time
 results = trackList$getPercentAdhered(velocityThreshold=5)
 #pdf(file=paste0('/Users/jaywarrick/Documents/MMB/Projects/Adhesion/MM AMD/',well,'_PercentAdhered.pdf'), width=6, height=4)
-plot(results$time, results$percentAdhered, xlab='Time [s]', ylab='Percent Adhered [%]', pch=20, cex=0.75, ylim=c(0,70))
+plot(results$time, results$percentAdhered, xlab='Time [s]', ylab='Percent Adhered [%]', pch=20, cex=0.75, ylim=c(0,100))
 #dev.off()
 
 # Now just grab all tracks that can be tracked from the last frame backward continuously
@@ -120,10 +138,12 @@ tempLastFrame <- max(trackList$allFrames)
 # Get rid of short tracks (i.e., cells that are too hard to follow for long periods of time like ones that go on and off screen)
 contTrackList$filterTracks(fun = trackFrameFilter, endMin=tempLastFrame)
 results = contTrackList$getPercentAdhered(velocityThreshold=5)
-#pdf(file=paste0('/Users/jaywarrick/Documents/MMB/Projects/Adhesion/MM AMD/',well,'_PercentAdhered.pdf'), width=6, height=4)
+pdf(file=paste0(path,well,'_PercentAdhered.pdf'), width=6, height=4)
 plot(results$time, results$percentAdhered, xlab='Time [s]', ylab='Percent Adhered [%]', pch=20, cex=0.75, ylim=c(0,70))
-#dev.off()
+dev.off()
 trackList <- trackList$copy()
 contTrackList <- contTrackList$copy()
 trackList$save(objectName=well, file=paste0(path,well,'.RData'))
 contTrackList$save(objectName=well, file=paste0(path,well,'_c','.RData'))
+
+trackList$getTrack(30)$points

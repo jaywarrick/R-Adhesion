@@ -15,14 +15,15 @@ library(pracma)
 #' @field allFrames numeric vector The vector containing a complete list of frame numbers existing in the data set
 #' @field validFrames numeric vector The subset of 'allFrames' which are set as valid using 'setValidFrames'
 TrackList <- setRefClass('TrackList',
-                         fields = list(tracks='list', sin='logical', fi='numeric', ff='numeric', phaseShift='numeric', t0_Frame='numeric', timePerFrame='numeric', sweepDuration='numeric', tAll='numeric', allFrames='numeric', validFrames='numeric'),
+                         fields = list(tracks='list', meta='list'), #sin='logical', fi='numeric', ff='numeric', phaseShift='numeric', t0_Frame='numeric', timePerFrame='numeric', sweepDuration='numeric', tAll='numeric', allFrames='numeric', validFrames='numeric'
                          methods = list(
-                              initializeWithJEXROIFile = function(file=NULL, sin=FALSE, fi, ff, t0_Frame=1, sweepDuration=500, timePerFrame)
+                              initializeWithJEXROIFile = function(file=NULL, metadata=list()) # sin=FALSE, fi, ff, t0_Frame=1, sweepDuration=500, timePerFrame)
                               {
                                    "
                                    #' Initialize the TrackList with a JEXROI file that has been 'tracked' already (i.e the
                                    #' id's of points have already been linked through time using a function like LAP Tracker)
                                    "
+
                                    require(foreign)
                                    tracksFile <- read.arff(file)
                                    tracksFile2 <- reorganizeTable(tracksFile, nameCol='Metadata')
@@ -36,9 +37,9 @@ TrackList <- setRefClass('TrackList',
                                         setTrack(newTrack)
                                         frameLimits <- range()
                                    }
-                                   setSweepParams(sin=sin, fi=fi, ff=ff, t0_Frame=t0_Frame, timePerFrame=timePerFrame, sweepDuration)
+                                   setMeta(sin=sin, fi=fi, ff=ff, t0_Frame=t0_Frame, timePerFrame=timePerFrame, sweepDuration)
                               },
-                              setSweepParams = function(sin, fi, ff, t0_Frame, timePerFrame, sweepDuration)
+                              setMeta = function(sin=sin, fi=fi, ff=ff, t0_Frame=t0_Frame, timePerFrame=timePerFrame, sweepDuration)
                               {
                                    "
                                    #' Set the sweep parameters used to predict particle motion during a log frequency sweep
@@ -50,15 +51,17 @@ TrackList <- setRefClass('TrackList',
                                    #' @param sweepDurtion numeric The time duration of the sweep in seconds
                                    #' The phase shift is not set here as that is determined using the getBulkPhaseShift method
                                    "
-                                   sin <<- sin
-                                   fi <<- fi
-                                   ff <<- ff
-                                   t0_Frame <<- t0_Frame
-                                   timePerFrame <<- timePerFrame
-                                   sweepDuration <<- sweepDuration
-                                   tAll <<- getTAll()
-                                   allFrames <<- getAllFrames()
+                                   meta <<- list()
+                                   meta$sin <<- sin
+                                   meta$fi <<- fi
+                                   meta$ff <<- ff
+                                   meta$t0_Frame <<- t0_Frame
+                                   meta$timePerFrame <<- timePerFrame
+                                   meta$sweepDuration <<- sweepDuration
+                                   calculateAllFrames()
+                                   calculateTAll()
                                    calculateVelocities()
+                                   callTrackFun('setMeta', meta)
                               },
                               length = function()
                               {
@@ -134,7 +137,7 @@ TrackList <- setRefClass('TrackList',
                                    #' is replaced
                                    #' @param newTrack Track the track to put into the list/set
                                    "
-                                   newTrack$.parent <- .self
+                                   # newTrack$.parent <- .self // Only need to setMeta once after all tracks are added
                                    tracks[[as.character(newTrack$id)]] <<- newTrack
                               },
                               removeTrack = function(id)
@@ -178,18 +181,10 @@ TrackList <- setRefClass('TrackList',
                                         track$id <- id
                                         # track$.parent <- .self # setTrack resets .parent
                                    }
-                                   track$addPoint(x=x, y=y, t=(frame-t0_Frame)*timePerFrame, frame=frame)
+                                   track$addPoint(x=x, y=y, t=(frame-meta$t0_Frame)*meta$timePerFrame, frame=frame)
                                    setTrack(track)
                               },
-                              getTAll = function()
-                              {
-                                   "
-                                   #' @return The times associated with each frame that exists within the TrackList
-                                   "
-                                   print('Calculating times for all frames in TrackList')
-                                   return((getAllFrames() - t0_Frame) * timePerFrame)
-                              },
-                              getAllFrames = function()
+                              calculateAllFrames = function()
                               {
                                    "
                                    #' @return The complete ordered list of frames that exist within the TrackList
@@ -199,15 +194,15 @@ TrackList <- setRefClass('TrackList',
                                    {
                                         possibleFrames <- c(possibleFrames, .track$getSlot('frame'))
                                    }
-                                   possibleFrames <- sort(unique(possibleFrames))
-                                   return(possibleFrames)
+                                   meta$allFrames <<- sort(unique(possibleFrames))
                               },
-                              getValidTimes = function()
+                              calculateTAll = function()
                               {
                                    "
-                                   #' @return The times associated with the valid frames of this TrackList
+                                   #' @return The times associated with each frame that exists within the TrackList
                                    "
-                                   return(tAll[allFrames %in% validFrames])
+                                   print('Calculating times for all frames in TrackList')
+                                   meta$tAll <<- (meta$allFrames - meta$t0_Frame) * meta$timePerFrame
                               },
                               calculateVelocities = function()
                               {
@@ -226,6 +221,13 @@ TrackList <- setRefClass('TrackList',
                                    "
                                    tempAllWidths <- getWindowWidths(fit=fit, dist=10, maxWidth=25)
                                    callTrackFun('smoothVelocities', allWidths=tempAllWidths, allFrames=allFrames)
+                              },
+                              calculateValidTimes = function()
+                              {
+                                   "
+                                   #' @return The times associated with the valid frames of this TrackList
+                                   "
+                                   return(meta$tAll[meta$allFrames %in% meta$validFrames])
                               },
                               applyToTracks = function(fun, ...)
                               {
@@ -301,11 +303,11 @@ TrackList <- setRefClass('TrackList',
                                    "
                                    if(!validOnly)
                                    {
-                                        frames <- getAllFrames()
+                                        frames <- meta$allFrames()
                                    }
                                    else
                                    {
-                                        frames <- validFrames
+                                        frames <- meta$validFrames
                                    }
                                    ids <- names(tracks)
                                    data <- matrix(NA, base::length(ids), base::length(frames), dimnames=list(id=names(tracks), frame=as.character(frames)))
@@ -333,14 +335,14 @@ TrackList <- setRefClass('TrackList',
                                    #' approximate a dt for each index based on diff's. Repeat last value at end to create a dt
                                    #' vector that is the same as the tracks$tAll vector
                                    "
-                                   dt <- diff(tAll)
+                                   dt <- diff(meta$tAll)
                                    dt <- c(dt, last(dt))
-                                   v <- 4*fit$par[['amplitude']]*(fi*(ff/fi)^(tAll/last(tAll)))
+                                   v <- 4*fit$par[['amplitude']]*(meta$fi*(meta$ff/meta$fi)^(meta$tAll/last(meta$tAll)))
                                    widths <- ceiling(dist/(v*dt))
                                    widths[widths > maxWidth] <- maxWidth
                                    return(widths)
                               },
-                              setValidFrames = function(fit, validStart=0.01, validEnd=0.99)
+                              calculateValidFrames = function(fit, validStart=0.01, validEnd=0.99)
                               {
                                    "
                                    #' Takes the fit and determines where the cells switch directions
@@ -375,7 +377,7 @@ TrackList <- setRefClass('TrackList',
                                         return(c(lower, upper))
                                    }
 
-                                   sweep <- getSweep(amplitude=fit$par['amplitude'], phaseShift=fit$par['phaseShift'], offset=0, sin=sin, fi=fi, ff=ff, sweepDuration=sweepDuration, t=tAll, guess=NULL)
+                                   sweep <- getSweep(amplitude=fit$par['amplitude'], phaseShift=fit$par['phaseShift'], offset=0, sin=meta$sin, fi=meta$fi, ff=meta$ff, sweepDuration=meta$sweepDuration, t=meta$tAll, guess=NULL)
                                    inflectionsToAddress <- sweep$inflectionNums %in% c(1,3) # These are times at which flow switches directions
                                    indicesToRemove <- numeric(0)
                                    for(i in which(inflectionsToAddress))
@@ -386,15 +388,15 @@ TrackList <- setRefClass('TrackList',
                                              indicesToRemove <- c(indicesToRemove, nearests)
                                         }
                                    }
-                                   validFrames0 <- allFrames
+                                   validFrames0 <- meta$allFrames
                                    validFrames0 <- validFrames0[-indicesToRemove]
 
                                    validFrames1 <- numeric(0)
-                                   for(tIndex in 1:base::length(tAll))
+                                   for(tIndex in 1:base::length(meta$tAll))
                                    {
                                         # Get the nearest inflection at or beyond this time
 
-                                        infIndex <- which.max((sweep$inflections >= tAll[tIndex]) & inflectionsToAddress)
+                                        infIndex <- which.max((sweep$inflections >= meta$tAll[tIndex]) & inflectionsToAddress)
                                         if(is.na(infIndex)) next
 
                                         # Get the bounding inflections that represent changes in fluid direction
@@ -410,14 +412,14 @@ TrackList <- setRefClass('TrackList',
                                         dInfT <- infT2-infT1 # define the time interval size between these two inflections
 
                                         # Within the if statement calculate the fractional location of this time index in the interval between the two inflections.
-                                        if( (tAll[tIndex] >= (infT1 + validStart*dInfT)) & (tAll[tIndex] <= (infT1 + validEnd*dInfT)) )
+                                        if( (tAll[tIndex] >= (infT1 + validStart*dInfT)) & (meta$tAll[tIndex] <= (infT1 + validEnd*dInfT)) )
                                         {
                                              # If it is within the startValid and endValid bounds, add it to the list of the valid frames
                                              validFrames1 <- c(validFrames1, allFrames[tIndex]) # (tIndex-1) = frame because frames are indices that start at 0
                                         }
                                    }
 
-                                   validFrames <<- sort(intersect(validFrames1, validFrames0))
+                                   meta$validFrames <<- sort(intersect(validFrames1, validFrames0))
 
                                    for(track in tracks)
                                    {
@@ -430,7 +432,7 @@ TrackList <- setRefClass('TrackList',
                                    #' @param velocityThrehsold numeric The pixels per second below which (exclusive) a cell is considered adhered - default=3 [pixels/second]
                                    #' @return Return a dataframe with columns of 'time' and 'percentAdhered'
                                    "
-                                   trackMatrix <- getMatrix(slot='vxs', validOnly=TRUE)
+                                   trackMatrix <- getMatrix(slot='vx', validOnly=TRUE)
                                    ret <- list()
                                    cellCount <- getCellCount()
                                    frames <- colnames(trackMatrix)
@@ -449,7 +451,7 @@ TrackList <- setRefClass('TrackList',
                                         }
                                    }
                                    percents <- 100*as.numeric(ret)
-                                   times <- tAll[allFrames %in% frames]
+                                   times <- meta$tAll[meta$allFrames %in% frames]
                                    return(data.frame(time=times, percentAdhered=percents))
                               },
                               getCellCount = function()
