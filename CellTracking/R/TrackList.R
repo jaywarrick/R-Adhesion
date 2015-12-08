@@ -17,13 +17,12 @@ library(pracma)
 TrackList <- setRefClass('TrackList',
                          fields = list(tracks='list', meta='list'), #sin='logical', fi='numeric', ff='numeric', phaseShift='numeric', t0_Frame='numeric', timePerFrame='numeric', sweepDuration='numeric', tAll='numeric', allFrames='numeric', validFrames='numeric'
                          methods = list(
-                              initializeWithJEXROIFile = function(file=NULL, metadata=list()) # sin=FALSE, fi, ff, t0_Frame=1, sweepDuration=500, timePerFrame)
+                              initializeWithJEXROIFile = function(file=NULL, t0_Frame, timePerFrame)
                               {
                                    "
                                    #' Initialize the TrackList with a JEXROI file that has been 'tracked' already (i.e the
                                    #' id's of points have already been linked through time using a function like LAP Tracker)
                                    "
-
                                    require(foreign)
                                    tracksFile <- read.arff(file)
                                    tracksFile2 <- reorganizeTable(tracksFile, nameCol='Metadata')
@@ -37,9 +36,18 @@ TrackList <- setRefClass('TrackList',
                                         setTrack(newTrack)
                                         frameLimits <- range()
                                    }
-                                   setMeta(sin=sin, fi=fi, ff=ff, t0_Frame=t0_Frame, timePerFrame=timePerFrame, sweepDuration)
                               },
-                              setMeta = function(sin=sin, fi=fi, ff=ff, t0_Frame=t0_Frame, timePerFrame=timePerFrame, sweepDuration)
+                              setStandardMeta = function(t0_Frame=t0_Frame, timePerFrame=timePerFrame)
+                              {
+                                   meta <<- list()
+                                   meta$t0_Frame <<- t0_Frame
+                                   meta$timePerFrame <<- timePerFrame
+                                   calculateAllFrames()
+                                   calculateTAll()
+                                   calculateVelocities()
+                                   callTrackFun('setMeta', meta)
+                              },
+                              setOscillatoryMeta = function(sin, fi, ff, t0_Frame, timePerFrame, sweepDuration)
                               {
                                    "
                                    #' Set the sweep parameters used to predict particle motion during a log frequency sweep
@@ -303,7 +311,7 @@ TrackList <- setRefClass('TrackList',
                                    "
                                    if(!validOnly)
                                    {
-                                        frames <- meta$allFrames()
+                                        frames <- meta$allFrames
                                    }
                                    else
                                    {
@@ -474,6 +482,13 @@ TrackList <- setRefClass('TrackList',
                                    in R external object format.'
                                    assign(objectName, .self)
                                    base::save(list=c(objectName), file = file)
+                              },
+                              refreshTracks = function()
+                              {
+                                   for(.track in tracks)
+                                   {
+                                        tracks[.track$id] <<- .track$copy()
+                                   }
                               }
                          )
 )

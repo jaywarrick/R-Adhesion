@@ -60,14 +60,15 @@ mListCopy$generateMaximaPlots(path=file.path('~/Public/DropBox/GitHub/R-Adhesion
 #mListCopy <- mListCopy$copy()
 
 # Now that the cells are tracked, we want to have the data reorganized into a list of tracks (i.e., a TrackList)
-trackList <- mListCopy$getTrackList(sin=FALSE, fi=1, ff=0.01, sweepDuration=300, t0_Frame=0, timePerFrame=0.035)
+trackList <- mListCopy$getTrackList(t0_Frame=0, timePerFrame=0.035)
+trackList$setOscillatoryMeta(sin=FALSE, fi=1, ff=0.01, sweepDuration=300, t0_Frame=0, timePerFrame=0.035)
 
 tListCopy <- trackList$copy()
 #trackList <- trackList$copy()
 #trackList<- tListCopy
 
 # Get rid of short tracks (i.e., cells that are too hard to follow for long periods of time like ones that go on and off screen)
-trackList$filterTracks(fun = trackLengthFilter, min=20, max=1000000)
+trackList$filterTracks(fun = trackLengthFilter, min=3, max=1000000)
 
 # We could get rid of other tracks based on when they start or stop with this filter but for now we'll include all tracks no matter when they start or stop by skipping this step.
 # trackList$filterTracks(fun = trackFrameFilter, startMin=0, startMax=1000000, endMin=maximaList$length()-1, endMax=1000000)

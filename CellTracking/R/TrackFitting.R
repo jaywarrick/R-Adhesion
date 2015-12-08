@@ -7,7 +7,7 @@ sseBulk <- function(trackList, trackMatrix, amplitude, phaseShift, timeScalingFa
      # we pass the 'trackMatrix' so we don't have to obtain it each iteration
 
      # get the sweep (for this we need the 'trackList')
-     sweep <- getSweep(amplitude=amplitude, phaseShift=phaseShift, offset=pi, sin=trackList$sin, ti=ti, fi=trackList$fi, ff=trackList$ff, sweepDuration=timeScalingFactor*trackList$sweepDuration, t=trackList$tAll, guess=NULL)
+     sweep <- getSweep(amplitude=amplitude, phaseShift=phaseShift, offset=pi, sin=trackList$meta$sin, ti=ti, fi=trackList$meta$fi, ff=trackList$meta$ff, sweepDuration=timeScalingFactor*trackList$meta$sweepDuration, t=trackList$meta$tAll, guess=NULL)
      # For each index in tAll (i.e., for each frame)
      sse <- sum((t(trackMatrix)-sweep$v)^2, na.rm=TRUE) # Do the transpose because the subtract function typically makes the subtracted vector vertical
      cat("(", amplitude, ",", timeScalingFactor, ",", ti, ") = ", sse, "\n", sep="")
@@ -23,7 +23,7 @@ sseBulkGS <- function(x, trackList, trackMatrix, amplitude, timeScalingFactor)
      # we pass the 'trackMatrix' so we don't have to obtain it each iteration
 
      # get the sweep (for this we need the 'trackList')
-     sweep <- getSweep(amplitude=amplitude, phaseShift=x[2], offset=pi, sin=trackList$sin, ti=x[1], fi=trackList$fi, ff=trackList$ff, sweepDuration=timeScalingFactor*trackList$sweepDuration, t=trackList$tAll, guess=NULL)
+     sweep <- getSweep(amplitude=amplitude, phaseShift=x[2], offset=pi, sin=trackList$meta$sin, ti=x[1], fi=trackList$meta$fi, ff=trackList$meta$ff, sweepDuration=timeScalingFactor*trackList$meta$sweepDuration, t=trackList$meta$tAll, guess=NULL)
      # For each index in tAll (i.e., for each frame)
 
      sse <- sum((t(trackMatrix)-sweep$v)^2, na.rm=TRUE) # Do the transpose because the subtract function typically makes the subtracted vector vertical
@@ -39,7 +39,7 @@ sseBulk2 <- function(trackList, trackMatrix, amplitude, phaseShift, ti, fi, ff)
      # we pass the 'trackMatrix' so we don't have to obtain it each iteration
      timeScalingFactor = 1
      # get the sweep (for this we need the 'trackList')
-     sweep <- getSweep(amplitude=amplitude, phaseShift=phaseShift, offset=pi, sin=trackList$sin, ti, fi=fi, ff=ff, sweepDuration=timeScalingFactor*trackList$sweepDuration, t=trackList$tAll, guess=NULL)
+     sweep <- getSweep(amplitude=amplitude, phaseShift=phaseShift, offset=pi, sin=trackList$meta$sin, ti, fi=fi, ff=ff, sweepDuration=timeScalingFactor*trackList$meta$sweepDuration, t=trackList$meta$tAll, guess=NULL)
      # For each index in tAll (i.e., for each frame)
      sse <- sum((t(trackMatrix)-sweep$v)^2, na.rm=TRUE) # Do the transpose because the subtract function typically makes the subtracted vector vertical
      cat("(", amplitude, ",", 1.00, ",", ti, ",", fi, ",", ff, ") = ", sse, "\n", sep="")
@@ -58,10 +58,10 @@ getBulkPhaseShift <- function(trackList, tiGuess=0)
      #amplitudeLimits=c(0.1*amplitude, amplitude)
      #phaseShiftLimits=c(1*pi,1.4*pi)
      timeScalingFactorLimits=c(0.99, 1.01)
-     tiLimits=c(-0.5/trackList$fi, 0.5/trackList$fi)
-     #sweepDurationLimits=c(0.98*trackList$sweepDuration, 1.02*trackList$sweepDuration)
-     #fiLimits=c(0.98*trackList$fi, 1.02*trackList$fi)
-     #ffLimits=c(0.98*trackList$ff, 1.02*trackList$ff)
+     tiLimits=c(-0.5/trackList$meta$fi, 0.5/trackList$meta$fi)
+     #sweepDurationLimits=c(0.98*trackList$meta$sweepDuration, 1.02*trackList$meta$sweepDuration)
+     #fiLimits=c(0.98*trackList$meta$fi, 1.02*trackList$meta$fi)
+     #ffLimits=c(0.98*trackList$meta$ff, 1.02*trackList$meta$ff)
      bestFit <- optim(par=guess,
                       function(par, trackList, trackMatrix){sseBulk(trackList=trackList, trackMatrix=trackMatrix, amplitude=amplitude, phaseShift=phaseShift, timeScalingFactor=par['timeScalingFactor'], ti=par['ti'])},
                       method='L-BFGS-B',
@@ -83,15 +83,15 @@ getBulkPhaseShift2 <- function(trackList, tiGuess=0)
      require(stats)
      trackMatrix <- trackList$getMatrix()
      amplitude <- max(as.numeric(trackList$getProp(fun=function(x){r <- x$range('x', rel=TRUE); r <- (r[2]-r[1])/5; return(r)})))
-     guess <- c(ti=tiGuess, fi=trackList$fi, ff=trackList$ff)
+     guess <- c(ti=tiGuess, fi=trackList$meta$fi, ff=trackList$meta$ff)
      #guess <- c(amplitude=amplitude, phaseShift=1.2*pi)
      #amplitudeLimits=c(0.1*amplitude, amplitude)
      #phaseShiftLimits=c(1*pi,1.4*pi)
      #timeScalingFactorLimits=c(0.99, 1.01)
-     tiLimits=c(-0.55/trackList$fi, 0.55/trackList$fi)
-     #sweepDurationLimits=c(0.98*trackList$sweepDuration, 1.02*trackList$sweepDuration)
-     fiLimits=c(0.98*trackList$fi, 1.05*trackList$fi)
-     ffLimits=c(0.98*trackList$ff, 1.05*trackList$ff)
+     tiLimits=c(-0.55/trackList$meta$fi, 0.55/trackList$meta$fi)
+     #sweepDurationLimits=c(0.98*trackList$meta$sweepDuration, 1.02*trackList$meta$sweepDuration)
+     fiLimits=c(0.98*trackList$meta$fi, 1.05*trackList$meta$fi)
+     ffLimits=c(0.98*trackList$meta$ff, 1.05*trackList$meta$ff)
      bestFit <- optim(par=guess,
                       function(par, trackList, trackMatrix){sseBulk2(trackList=trackList, trackMatrix=trackMatrix, amplitude=amplitude, phaseShift=phaseShift, ti=par['ti'], fi=par['fi'], ff=par['ff'])},
                       method='L-BFGS-B',

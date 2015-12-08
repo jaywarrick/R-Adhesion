@@ -5,13 +5,14 @@
 #' @field trackBackStart A single numeric value indicating the frame at which cells were tracked backward from (i.e., usually a late frame)
 #' @field trackBackEnd A single numeric value indicating the frame at which cells were tracked back to (i.e., usually an early frame)
 MaximaList <- setRefClass('MaximaList',
-                          fields = list(maxima='list', maxID='numeric', trackBackStart='numeric', trackBackEnd='numeric'),
+                          fields = list(maxima='list', maxID='numeric', trackBackStart='numeric', trackBackEnd='numeric', timeDimName='character'),
                           methods = list(
                                initializeWithJEXROIFile = function(path, timeDimName='Time')
                                {
                                     "
                                     #' Initialize with a file (eg., .jxd ROI file from JEX) that stores all the point sets as semicolon separated comma separated point information (see Maxima documentation).
                                     "
+                                    timeDimName <<- timeDimName
                                     maximaFile <- read.arff(path)
                                     initializeWithROIDataFrame(roiTable=maximaFile, timeDimName=timeDimName)
                                },
@@ -152,19 +153,7 @@ MaximaList <- setRefClass('MaximaList',
                                     indicesToRemove <- which(!(allFrameNames %in% endFrame:startFrame))
                                     maxima[indicesToRemove] <<- NULL
                                },
-                               getTrackList = function(sin=FALSE, fi, ff, sweepDuration, t0_Frame=0, timePerFrame=0.035, frameRange=c(0,-1))
-                               {
-                                    trackList <- getStandardTrackList(t0_Frame=t0_Frame, timePerFrame=timePerFrame, frameRange=frameRange)
-                                    trackList$sin <- sin
-                                    trackList$fi <- fi
-                                    trackList$ff <- ff
-                                    trackList$sweepDuration <- sweepDuration
-                                    trackList$tAll <- trackList$getTAll()
-                                    trackList$allFrames <- trackList$getAllFrames()
-                                    trackList$calculateVelocities()
-                                    return(trackList)
-                               },
-                               getStandardTrackList = function(t0_Frame=0, timePerFrame=0.035, frameRange=c(0,-1))
+                               getTrackList = function(t0_Frame, timePerFrame, frameRange=c(0,-1))
                                {
                                     "
                                     #' Create a TrackList object from this MaximaList object (essentially a list indexed/grouped by cell id instead of time)
@@ -177,7 +166,8 @@ MaximaList <- setRefClass('MaximaList',
                                     {
                                          exportFrames <- names(maxima)[names(maxima) %in% as.character(frameRange[1]:frameRange[2])]
                                     }
-                                    trackList <- new('TrackList', t0_Frame=t0_Frame, timePerFrame=timePerFrame)
+                                    trackList <- new('TrackList')
+                                    trackList$setStandardMeta(t0_Frame=t0_Frame, timePerFrame=timePerFrame)
                                     count = 0
                                     total = base::length(exportFrames)
                                     for(f in exportFrames)
@@ -191,6 +181,7 @@ MaximaList <- setRefClass('MaximaList',
                                          count <- count + 1
                                          cat("Generating TrackList: ", round(100*count/total, digits=2), "%\n", sep="")
                                     }
+                                    trackList$setStandardMeta(t0_Frame=t0_Frame, timePerFrame=timePerFrame) # Set again to ensure information filters down to all tracks
                                     return(trackList)
                                },
                                getProp = function(fun=function(.maxima){return(base::range(.maxima$points$x))})
@@ -241,6 +232,33 @@ MaximaList <- setRefClass('MaximaList',
                                     }
                                     trackBackStart <<- trackBackStart + offset
                                     trackBackEnd <<- trackBackEnd + offset
+                               },
+                               saveROI = function(file)
+                               {
+                                    print(as.factor(as.numeric(names(maxima))))
+                                    temp1 <- data.frame(Time=as.numeric(names(maxima)), Metadata=rep(as.factor(c('Type','patternPts','polygonPts')), each=base::length(names(maxima))))
+                                    temp1$Value[temp1$Metadata == 'Type'] <- '5'
+                                    temp1$Value[temp1$Metadata == 'patternPts'] <- '0,0,0'
+                                    for(.maxima in maxima)
+                                    {
+                                         toSave <- ''
+                                         jn <- nrow(.maxima$points)
+                                         if(jn > 1)
+                                         {
+                                              for(j in 1:(jn-1))
+                                              {
+                                                   toSave <- paste0(toSave, paste0(.maxima$points$x[j], ",", .maxima$points$y[j], ",", as.character(.maxima$points$id[j]), ";"))
+                                              }
+                                         }
+                                         if(jn > 0)
+                                         {
+                                              # use of "as.character" on id is important to get the right cell label because the factor levels are per maxima table instead of spanning maxima tables
+                                              toSave <- paste0(toSave, paste0(.maxima$points$x[jn], ",", .maxima$points$y[jn], ",", as.character(maxima$points$id[jn])))
+                                         }
+                                         temp1$Value[temp1$Metadata == 'polygonPts' & temp1$Time == .maxima$frame] <- toSave
+                                    }
+                                    temp1$Time <- as.factor(temp1$Time);
+                                    write.arff(temp1, file=file, relation='ROI-Maxima')
                                }
                           )
 )

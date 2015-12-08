@@ -70,8 +70,19 @@ Track <- setRefClass('Track',
                                #' 'validOnly' indicates whether to return values for the validFrames only or all frames
                                #' typical slots are x, y, t, frame, vx, vy
                                "
+                               if(isempty(validFrames) & validOnly)
+                               {
+                                    stop("Can't determine valid frames as they have not been set yet for this track")
+                               }
+                               if(validOnly)
+                               {
+                                    validIndices <- points$frame %in% validFrames
+                               }
+                               else
+                               {
+                                    validIndices <- points$frame
+                               }
 
-                               validIndices <- points$frame %in% validFrames
 
                                if(rel)
                                {
