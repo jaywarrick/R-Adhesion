@@ -227,7 +227,7 @@ TrackList <- setRefClass('TrackList',
                                    #' @param fit The fit results returned from 'getBulkPhaseShift' fitting function
                                    #' @param dist numeric The number of pixels of motion that should be observed before estimating the velocity
                                    "
-                                   tempAllWidths <- getWindowWidths(fit=fit, dist=10, maxWidth=25)
+                                   tempAllWidths <- getWindowWidths(fit=fit, dist=dist, maxWidth=maxWidth)
                                    callTrackFun('smoothVelocities', allWidths=tempAllWidths, allFrames=allFrames)
                               },
                               calculateValidTimes = function()
