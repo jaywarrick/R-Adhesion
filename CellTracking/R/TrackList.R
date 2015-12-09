@@ -228,7 +228,7 @@ TrackList <- setRefClass('TrackList',
                                    #' @param dist numeric The number of pixels of motion that should be observed before estimating the velocity
                                    "
                                    tempAllWidths <- getWindowWidths(fit=fit, dist=dist, maxWidth=maxWidth)
-                                   callTrackFun('smoothVelocities', allWidths=tempAllWidths, allFrames=allFrames)
+                                   callTrackFun('smoothVelocities', allWidths=tempAllWidths, allFrames=meta$allFrames)
                               },
                               calculateValidTimes = function()
                               {
@@ -423,7 +423,7 @@ TrackList <- setRefClass('TrackList',
                                         if( (tAll[tIndex] >= (infT1 + validStart*dInfT)) & (meta$tAll[tIndex] <= (infT1 + validEnd*dInfT)) )
                                         {
                                              # If it is within the startValid and endValid bounds, add it to the list of the valid frames
-                                             validFrames1 <- c(validFrames1, allFrames[tIndex]) # (tIndex-1) = frame because frames are indices that start at 0
+                                             validFrames1 <- c(validFrames1, meta$allFrames[tIndex]) # (tIndex-1) = frame because frames are indices that start at 0
                                         }
                                    }
 
