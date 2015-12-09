@@ -431,7 +431,7 @@ TrackList <- setRefClass('TrackList',
 
                                    for(track in tracks)
                                    {
-                                        track$setValidFrames(validFrames)
+                                        track$setValidFrames(meta$validFrames)
                                    }
                               },
                               getPercentAdhered = function(velocityThreshold=3)
