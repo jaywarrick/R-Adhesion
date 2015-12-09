@@ -420,7 +420,7 @@ TrackList <- setRefClass('TrackList',
                                         dInfT <- infT2-infT1 # define the time interval size between these two inflections
 
                                         # Within the if statement calculate the fractional location of this time index in the interval between the two inflections.
-                                        if( (tAll[tIndex] >= (infT1 + validStart*dInfT)) & (meta$tAll[tIndex] <= (infT1 + validEnd*dInfT)) )
+                                        if( (meta$tAll[tIndex] >= (infT1 + validStart*dInfT)) & (meta$tAll[tIndex] <= (infT1 + validEnd*dInfT)) )
                                         {
                                              # If it is within the startValid and endValid bounds, add it to the list of the valid frames
                                              validFrames1 <- c(validFrames1, meta$allFrames[tIndex]) # (tIndex-1) = frame because frames are indices that start at 0
