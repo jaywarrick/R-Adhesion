@@ -61,14 +61,38 @@ mListCopy$generateMaximaPlots(path=file.path('~/Public/DropBox/GitHub/R-Adhesion
 
 # Now that the cells are tracked, we want to have the data reorganized into a list of tracks (i.e., a TrackList)
 trackList <- mListCopy$getTrackList(t0_Frame=0, timePerFrame=0.035)
+
+# Get rid of short tracks (i.e., cells that are too hard to follow for long periods of time like ones that go on and off screen)
+trackList$filterTracks(fun = trackLengthFilter, min=3, max=1000000)
+
+# Set the metadata
 trackList$setOscillatoryMeta(sin=FALSE, fi=1, ff=0.01, sweepDuration=300, t0_Frame=0, timePerFrame=0.035)
+
+# Fit all the data points with a single curve to determine the phaseShift of the cells
+#bestFit <- getBulkPhaseShift2(trackList, tiGuess=0)
+bestFit <- getBulkPhaseShiftGS(trackList, cores=1)
+
+# Given the flow switches direction and attached cells can 'wobble', we only want to gage whether as cell is adhered
+# after it is done wobbling. To do this we set which frames are 'valid' for determining whether the cell is adhered or not.
+# We need the 'bestFit' to estimate where the chages in flow direction are.
+# We then want to wait before quantifying because the cell could be wobbling so 'validStart' dictates when
+# after the change in flow direction we can see if the cell is adhered or not. 'validStart' is expressed as a
+# fraction of the interval between changed in flow direction (i.e., validStart=0.1 says to wait 10% of the time between direction changes to mark time frames as valid)
+# 'validEnd' is also a fraction of the same interval. Frames between 'validStart' and 'validEnd' within each interval bounded by changes in flow direction
+# are recorded as being valid.
+trackList$calculateValidFrames(fit=bestFit, validStart=0.2, validEnd=0.8)
+
+# Smooth the velocities (i.e., average over multiple frames) to get a more accurate measure, especially for slow moving cells
+# We need the bestFit information to estimate the speed of cells over time
+# 'dist' refers to the distance in pixels that we want to see the cell travel before quantifying its velocity
+# 'maxWidth' refers to the maximum number of frames to average together to estimate velocity (i.e., it's great to try and use more frames but we don't want to use too many)
+trackList$smoothVelocities(fit=bestFit, dist=10, maxWidth=15)
 
 tListCopy <- trackList$copy()
 #trackList <- trackList$copy()
 #trackList<- tListCopy
 
-# Get rid of short tracks (i.e., cells that are too hard to follow for long periods of time like ones that go on and off screen)
-trackList$filterTracks(fun = trackLengthFilter, min=3, max=1000000)
+
 
 # We could get rid of other tracks based on when they start or stop with this filter but for now we'll include all tracks no matter when they start or stop by skipping this step.
 # trackList$filterTracks(fun = trackFrameFilter, startMin=0, startMax=1000000, endMin=maximaList$length()-1, endMax=1000000)
@@ -80,26 +104,13 @@ maximaList <- maximaList$copy()
 mListCopy <- mListCopy$copy()
 trackList <- trackList$copy()
 tListCopy <- tListCopy$copy()
+trackList$filterTracks(fun = trackLengthFilter, min=3, max=1000000)
 
-# Fit all the data points with a single curve to determine the phaseShift of the cells
-#bestFit <- getBulkPhaseShift2(trackList, tiGuess=0)
-bestFit <- getBulkPhaseShiftGS(trackList, cores=4)
 
-# Smooth the velocities (i.e., average over multiple frames) to get a more accurate measure, especially for slow moving cells
-# We need the bestFit information to estimate the speed of cells over time
-# 'dist' refers to the distance in pixels that we want to see the cell travel before quantifying its velocity
-# 'maxWidth' refers to the maximum number of frames to average together to estimate velocity (i.e., it's great to try and use more frames but we don't want to use too many)
-trackList$smoothVelocities(fit=bestFit, dist=10, maxWidth=15)
 
-# Given the flow switches direction and attached cells can 'wobble', we only want to gage whether as cell is adhered
-# after it is done wobbling. To do this we set which frames are 'valid' for determining whether the cell is adhered or not.
-# We need the 'bestFit' to estimate where the chages in flow direction are.
-# We then want to wait before quantifying because the cell could be wobbling so 'validStart' dictates when
-# after the change in flow direction we can see if the cell is adhered or not. 'validStart' is expressed as a
-# fraction of the interval between changed in flow direction (i.e., validStart=0.1 says to wait 10% of the time between direction changes to mark time frames as valid)
-# 'validEnd' is also a fraction of the same interval. Frames between 'validStart' and 'validEnd' within each interval bounded by changes in flow direction
-# are recorded as being valid.
-trackList$setValidFrames(fit=bestFit, validStart=0.2, validEnd=0.8)
+
+
+
 
 # update the trackList upon editing a method
 #trackList <- TrackList$new( trackList )
