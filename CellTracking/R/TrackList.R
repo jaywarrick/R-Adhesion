@@ -299,7 +299,7 @@ TrackList <- setRefClass('TrackList',
                                    sorted <- sort(unlist(ret), index.return=T, decreasing=decreasing)
                                    tracks <<- tracks[sorted$ix]
                               },
-                              getMatrix = function(slot='vx', validOnly=FALSE)
+                              getMatrix = function(slot='vx', validOnly=FALSE, rel=FALSE)
                               {
                                    "
                                    #' Get a matrix of the tracklist data. Track id's are rows while
@@ -321,7 +321,7 @@ TrackList <- setRefClass('TrackList',
                                    data <- matrix(NA, base::length(ids), base::length(frames), dimnames=list(id=names(tracks), frame=as.character(frames)))
                                    for(track in tracks)
                                    {
-                                        data[as.character(track$id), as.character(track$getSlot(slot='frame', rel=FALSE, validOnly=validOnly))] <- track$getSlot(slot=slot, rel=FALSE, validOnly=validOnly)
+                                        data[as.character(track$id), as.character(track$getSlot(slot='frame', rel=rel, validOnly=validOnly))] <- track$getSlot(slot=slot, rel=FALSE, validOnly=validOnly)
                                    }
                                    return(data)
                               },
@@ -440,7 +440,7 @@ TrackList <- setRefClass('TrackList',
                                    #' @param velocityThrehsold numeric The pixels per second below which (exclusive) a cell is considered adhered - default=3 [pixels/second]
                                    #' @return Return a dataframe with columns of 'time' and 'percentAdhered'
                                    "
-                                   trackMatrix <- getMatrix(slot='vx', validOnly=TRUE)
+                                   trackMatrix <- getMatrix(slot='vx', validOnly=TRUE, rel=FALSE)
                                    ret <- list()
                                    cellCount <- getCellCount()
                                    frames <- colnames(trackMatrix)
@@ -464,7 +464,7 @@ TrackList <- setRefClass('TrackList',
                               },
                               getCellCount = function()
                               {
-                                   trackMatrix <- getMatrix(slot='vxs', validOnly=TRUE)
+                                   trackMatrix <- getMatrix(slot='vx', validOnly=TRUE)
                                    if(base::length(trackMatrix) == 0 || nrow(trackMatrix) == 0)
                                    {
                                         return(0)
