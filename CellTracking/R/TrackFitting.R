@@ -128,7 +128,7 @@ getBulkPhaseShiftGS <- function(trackList, ti=seq(-0.5,0.5,1/30), phaseShift=seq
 }
 
 #' @return the sum square error between the data and a logNorm cumulative curve
-sseLogNormGS <- function(x, dataX, dataY)
+sseLogNormGS1 <- function(x, dataX, dataY)
 {
      temp <- logNorm(x=dataX, mu=x[1], sigma=x[2])
      # For each index in tAll (i.e., for each frame)
@@ -136,9 +136,18 @@ sseLogNormGS <- function(x, dataX, dataY)
      cat("(", x[1], ",", x[2], ") = ", sse, "\n", sep="")
      return(sse)
 }
-sseLogNorm <- function(x, y, mu, sigma, gridSearch=FALSE)
+#' @return the sum square error between the data and a logNorm cumulative curve
+sseLogNormGS2 <- function(x, dataX, dataY)
 {
+     temp <- logNorm2(dataX, x[1], x[2], x[3], x[4], x[5])
+     # For each index in tAll (i.e., for each frame)
+     sse <- sum((dataY-temp)^2, na.rm=TRUE) # Do the transpose because the subtract function typically makes the subtracted vector vertical
+     cat("(", x[1], ",", x[2], ",", x[3], ",", x[4], ",", x[5], ") = ", sse, "\n", sep="")
+     return(sse)
+}
 
+sseLogNorm1 <- function(x, y, mu, sigma)
+{
      temp <- logNorm(x=x, mu=mu, sigma=sigma)
      # For each index in tAll (i.e., for each frame)
      sse <- sum((y-temp)^2, na.rm=TRUE) # Do the transpose because the subtract function typically makes the subtracted vector vertical
@@ -174,6 +183,25 @@ sseLogNorm2 <- function(x, y, alpha, mu1, sigma1, mu2, sigma2)
 logNorm2 <- function(x=seq(0,10,0.1), alpha=0.5, mu1=1, sigma1=1, mu2=1.5, sigma2=1.5)
 {
      return(alpha*(1-(1/2+(1/2)*erf((log(x)-log(mu1))/(sqrt(2*sigma1))))) + (1-alpha)*(1-(1/2+(1/2)*erf((log(x)-log(mu2))/(sqrt(2*sigma2))))))
+}
+
+getGuessGS <- function(x, y, mu=lseq(0.0001, 0.5, 50), sigma=seq(0.1,5,0.1), cores=1)
+{
+     mc.control <- list(mc.cores=cores)
+     levels <- list(mu=mu, sigma=sigma)
+     res <- gridSearch(sseLogNormGS1, levels, dataX=x, dataY=y, method='multicore', mc.control=mc.control)
+     muRet <- res$minlevels[1]
+     sigmaRet <- res$minlevels[2]
+     limitFlag <- FALSE
+     if(muRet == min(mu) || muRet == max(mu))
+     {
+          limitFlag = TRUE
+     }
+     if(sigmaRet == min(sigma) || sigmaRet == max(sigma))
+     {
+          limitFlag = TRUE
+     }
+     return(list(mu=muRet, sigma=sigmaRet, limitFlag=limitFlag))
 }
 
 getGuess <- function(x, y, thresh, max=1, fraction=0.2, cores=1)
@@ -226,64 +254,42 @@ getGuess <- function(x, y, thresh, max=1, fraction=0.2, cores=1)
      return(list(mu=tau, sigma=sigma, minLevels=res$minlevels))
 }
 
-fitLogNorm <- function(x, y, thresh=0.5, SANN=FALSE)
+fitLogNorm1 <- function(x, y, guess, method='L-BFGS-B')
 {
-     guess <- getGuess(x=x, y=y, thresh=thresh)
-     temp <- guess$minLevels
-     guess$minLevels <- NULL
-     sigmaLimits=c(guess[['sigma']]*0.1, guess[['sigma']]*10)
-     muLimits=c(guess[['mu']]*0.1, guess[['mu']]*10)
-     if(SANN)
-     {
-          method <- 'SANN'
-     }
-     else
-     {
-          method <- 'L-BFGS-B'
-     }
      bestFit <- optim(par=guess,
-                      function(par, x, y){sseLogNorm(x=x, y=y, mu=par['mu'], sigma=par['sigma'])},
+                      function(par, x, y){sseLogNorm1(x=x, y=y, mu=par['mu'], sigma=par['sigma'])},
                       method=method,
-                      lower=c(min(muLimits), min(sigmaLimits)),
-                      upper=c(max(muLimits), max(sigmaLimits)),
+                      lower=c(1e-8,1e-2),
+                      #  upper=c(max(muLimits), max(sigmaLimits)),
                       control=list(trace=0),
                       x=x,
                       y=y)
      sst <- sum((y-mean(y))^2)
-     sse <- sseLogNorm2(x=x, y=y, alpha=bestFit$par[['alpha']], mu1=bestFit$par['mu1'], sigma1=bestFit$par[['sigma1']], mu2=bestFit$par['mu2'], sigma2=bestFit$par[['sigma2']])
+     sse <- sseLogNorm1(x=x, y=y, mu=bestFit$par['mu'], sigma=bestFit$par['sigma'])
      r2 <- 1-(sse/sst)
-     print(paste0('guess = ', guess))
-     print(paste0('muLimits = ', muLimits))
-     print(paste0('sigmaLimits = ', sigmaLimits))
-     return(list(par=c(mu=bestFit$par[['mu']], sigma=bestFit$par[['sigma']]), fit=bestFit, sse=sse, sst=sst, r2=r2, res=temp))
+     #      print(paste0('guess = ', guess))
+     #      print(paste0('muLimits = ', muLimits))
+     #      print(paste0('sigmaLimits = ', sigmaLimits))
+     # print(bestFit$par)
+     return(list(par=c(mu=bestFit$par[['mu']], sigma=bestFit$par[['sigma']]), fit=bestFit, sse=sse, sst=sst, r2=r2))
 }
 
-fitLogNorm2 <- function(x, y, guess, alpha=0.1, newMu=0.02, newSigma=0, SANN=FALSE)
+fitLogNorm2 <- function(x, y, guess, alpha, mu2Guess, sigma2Guess, method='L-BFGS-B')
 {
-     sse_single <- sum((y-logNorm(x=x, mu=guess[['mu']], sigma=guess[['sigma']]))^2, na.rm=TRUE)
-     alphaLimits <- c(0.01,0.99)
-     sigma1Limits=as.numeric(c(guess[['sigma']]*(1-alpha), guess[['sigma']]*(1/(1-alpha))))
-     sigma2Limits=as.numeric(c(newSigma*alpha, newSigma*(1/alpha)))
-     mu1Limits=as.numeric(c(guess[['mu']]*(1-alpha), guess[['mu']]*(1/(1-alpha))))
-     mu2Limits=as.numeric(c(newMu*alpha, newMu*(1/alpha)))
-     #      guess <- getGuess(x=x, y=y, thresh=thresh2)
-     #      guess2 <- guess
-     #      sigma2Limits=c(guess[['sigma']]*0.1, guess[['sigma']]*10)
-     #      mu2Limits=c(guess[['mu']]*0.1, guess[['mu']]*10)
-     if(SANN)
-     {
-          method <- 'SANN'
-     } else
-     {
-          method <- 'L-BFGS-B'
-     }
-     # guess <- c(alpha=alpha, mu1=as.numeric(guess1['mu']), sigma1=as.numeric(guess1['sigma']), mu2=as.numeric(guess2['mu']), sigma2=as.numeric(guess2['sigma']))
-     guess <- c(alpha=alpha, mu1=guess[['mu']], sigma1=guess[['sigma']], mu2=newMu, sigma2=newSigma)
+     sse_single <- sseLogNorm1(x, y, mu=guess[['mu']], sigma=guess[['sigma']])
+
+     #      alphaLimits <- c(0.01,0.99)
+     #      sigma1Limits=as.numeric(c(guess[['sigma']]*(1-alpha), guess[['sigma']]*(1/(1-alpha))))
+     #      sigma2Limits=as.numeric(c(newSigma*alpha, newSigma*(1/alpha)))
+     #      mu1Limits=as.numeric(c(guess[['mu']]*(1-alpha), guess[['mu']]*(1/(1-alpha))))
+     #      mu2Limits=as.numeric(c(newMu*alpha, newMu*(1/alpha)))
+
+     guess <- c(alpha=alpha, mu1=guess[['mu']], sigma1=guess[['sigma']], mu2=mu2Guess, sigma2=sigma2Guess)
      bestFit <- optim(par=guess,
                       function(par, x, y){sseLogNorm2(x=x, y=y, alpha=par['alpha'], mu1=par['mu1'], sigma1=par['sigma1'], mu2=par['mu2'], sigma2=par['sigma2'])},
                       method=method,
-                      lower=c(min(alphaLimits), min(mu1Limits), min(sigma1Limits), min(mu2Limits), min(sigma2Limits)),
-                      upper=c(max(alphaLimits), max(mu1Limits), max(sigma1Limits), max(mu2Limits), max(sigma2Limits)),
+                      lower=c(0,1e-8,1e-2,1e-8,1e-2),
+                      #upper=c(max(alphaLimits), max(mu1Limits), max(sigma1Limits), max(mu2Limits), max(sigma2Limits)),
                       control=list(trace=0),
                       x=x,
                       y=y)
@@ -291,13 +297,47 @@ fitLogNorm2 <- function(x, y, guess, alpha=0.1, newMu=0.02, newSigma=0, SANN=FAL
      sse <- sseLogNorm2(x=x, y=y, alpha=bestFit$par[['alpha']], mu1=bestFit$par['mu1'], sigma1=bestFit$par['sigma1'], mu2=bestFit$par['mu2'], sigma2=bestFit$par['sigma2'])
      r2_single <- 1-(sse_single/sst)
      r2_double <- 1-(sse/sst)
-     guess
-     print(paste0('mu1Limits = ', mu1Limits))
-     print(paste0('sigma1Limits = ', sigma1Limits))
-     print(paste0('mu2Limits = ', mu2Limits))
-     print(paste0('sigma2Limits = ', sigma2Limits))
+     #      print(paste0('mu1Limits = ', mu1Limits))
+     #      print(paste0('sigma1Limits = ', sigma1Limits))
+     #      print(paste0('mu2Limits = ', mu2Limits))
+     #      print(paste0('sigma2Limits = ', sigma2Limits))
      return(list(par=c(alpha=bestFit$par[['alpha']], mu1=bestFit$par[['mu1']], sigma1=bestFit$par[['sigma1']], mu2=bestFit$par[['mu2']], sigma2=bestFit$par[['sigma2']]), fit=bestFit, sse=sse, sst=sst, r2_single=r2_single, r2_double=r2_double))
 }
+
+fitLogNormGS <- function(x, y, mu=lseq(0.0001, 0.5, 50), sigma=seq(0.1,5,0.1), alphaGuess=0.9, mu2Guess=NULL, sigma2Guess=NULL, method='L-BFGS-B', cores=1)
+{
+     guessGS <- getGuessGS(x, y, mu=mu, sigma=sigma, cores=cores)
+
+     limitFlag <- guessGS[['limitFlag']]
+     guessGS$limitFlag <- NULL # remove from list so it doesn't mess up optim function.
+
+     bestFit1 <- fitLogNorm1(x, y, guess=guessGS, method=method)
+
+     guess <- bestFit1$par
+
+     if(is.null(mu2Guess))
+     {
+          mu2Guess = (1+guess[['sigma']])*guess[['mu']]
+     }
+     if(is.null(sigma2Guess))
+     {
+          sigma2Guess = guess[['sigma']]
+     }
+
+     bestFit2 <- fitLogNorm2(x, y, guess=guess, alpha=alphaGuess, mu2Guess=mu2Guess, sigma2Guess=sigma2Guess, method=method)
+
+
+     return(list(par1=guess, par2=bestFit2$par, r2_single=bestFit2$r2_single, r2_double=bestFit2$r2_double, logNormFit1=bestFit1, logNormFit2=bestFit2, limitFlag=limitFlag))
+}
+
+temp45 <- fitLogNormGS(x, y, cores=4)
+temp45$par1
+temp45$par2
+temp45$r2_single
+temp45$r2_double
+plot(x, y, log='x')
+lines(x, do.call(logNorm, c(list(x=x), temp45$par1)), lwd=3, col='red')
+lines(x, do.call(logNorm2, c(list(x=x), temp45$par2)), lwd=3, col='blue')
 
 # duh <- trackList$getPercentAdhered(velocityThreshold=1)
 # tau <- getShearStress(f=getFrequencies(duh$time)$f, pixelAmplitude = 180, mu=0.0052)
