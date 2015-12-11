@@ -72,7 +72,8 @@ Track <- setRefClass('Track',
                                "
                                if(isempty(validFrames) & validOnly)
                                {
-                                    stop("Can't determine valid frames as they have not been set yet for this track")
+                                    cat("Track ID: ", id, " - Can't determine valid frames as this track either doesn't have any frames that are actually valid or they have not been set yet for this track")
+                                    return(numeric(0))
                                }
                                if(validOnly)
                                {
