@@ -304,7 +304,7 @@ fitLogNorm2 <- function(x, y, guess, alpha, mu2Guess, sigma2Guess, method='L-BFG
      return(list(par=c(alpha=bestFit$par[['alpha']], mu1=bestFit$par[['mu1']], sigma1=bestFit$par[['sigma1']], mu2=bestFit$par[['mu2']], sigma2=bestFit$par[['sigma2']]), fit=bestFit, sse=sse, sst=sst, r2_single=r2_single, r2_double=r2_double))
 }
 
-fitLogNormGS <- function(x, y, mu=lseq(0.0001, 0.5, 50), sigma=seq(0.1,5,0.1), alphaGuess=0.9, mu2Guess=NULL, sigma2Guess=NULL, method='L-BFGS-B', cores=1)
+fitLogNormGS <- function(x, y, mu=lseq(0.0001, 0.5, 50), sigma=seq(0.1,5,0.1), alphaGuess=0.9, mu2Guess=-1, sigma2Guess=-1, method='L-BFGS-B', cores=1)
 {
      guessGS <- getGuessGS(x, y, mu=mu, sigma=sigma, cores=cores)
 
@@ -315,11 +315,11 @@ fitLogNormGS <- function(x, y, mu=lseq(0.0001, 0.5, 50), sigma=seq(0.1,5,0.1), a
 
      guess <- bestFit1$par
 
-     if(is.null(mu2Guess))
+     if(mu2Guess < 0)
      {
           mu2Guess = (1+guess[['sigma']])*guess[['mu']]
      }
-     if(is.null(sigma2Guess))
+     if(sigma2Guess < 0)
      {
           sigma2Guess = guess[['sigma']]
      }
