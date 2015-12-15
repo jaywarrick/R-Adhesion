@@ -330,14 +330,14 @@ fitLogNormGS <- function(x, y, mu=lseq(0.0001, 0.5, 50), sigma=seq(0.1,5,0.1), a
      return(list(par1=guess, par2=bestFit2$par, r2_single=bestFit2$r2_single, r2_double=bestFit2$r2_double, logNormFit1=bestFit1, logNormFit2=bestFit2, limitFlag=limitFlag))
 }
 
-temp45 <- fitLogNormGS(x, y, cores=4)
-temp45$par1
-temp45$par2
-temp45$r2_single
-temp45$r2_double
-plot(x, y, log='x')
-lines(x, do.call(logNorm, c(list(x=x), temp45$par1)), lwd=3, col='red')
-lines(x, do.call(logNorm2, c(list(x=x), temp45$par2)), lwd=3, col='blue')
+# temp45 <- fitLogNormGS(x, y, cores=4)
+# temp45$par1
+# temp45$par2
+# temp45$r2_single
+# temp45$r2_double
+# plot(x, y, log='x')
+# lines(x, do.call(logNorm, c(list(x=x), temp45$par1)), lwd=3, col='red')
+# lines(x, do.call(logNorm2, c(list(x=x), temp45$par2)), lwd=3, col='blue')
 
 # duh <- trackList$getPercentAdhered(velocityThreshold=1)
 # tau <- getShearStress(f=getFrequencies(duh$time)$f, pixelAmplitude = 180, mu=0.0052)
