@@ -124,8 +124,16 @@ getBulkPhaseShiftGS <- function(trackList, ti=seq(-1,1,1/30), phaseShift=seq(-pi
      {
           res <- gridSearch(sseBulkGS, levels=list(ti=ti, phaseShift=phaseShift), trackList=trackList, trackMatrix=trackMatrix, amplitude=amplitude, timeScalingFactor=1, method='loop')
      }
+     
+     finalPhaseShift <- res$minlevels[2]
+     finalTi=res$minlevels[1]
+     limitFlag <- 0
+     if(finalPhaseShift %in% range(ti) | finalTi %in% range(phaseShift))
+     {
+     	limitFlag <- 1
+     }
 
-     return(list(par=c(phaseShift=res$minlevels[2], amplitude=amplitude, timeScalingFactor=1, ti=res$minlevels[1], offset=0), fit=NULL, errorResults=res))
+     return(list(par=c(phaseShift=finalPhaseShift, amplitude=amplitude, timeScalingFactor=1, ti=finalTi, offset=0, limitFlag=limitFlag), fit=NULL, errorResults=res))
 }
 
 #' @return the sum square error between the data and a logNorm cumulative curve
