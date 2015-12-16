@@ -105,7 +105,7 @@ getBulkPhaseShift2 <- function(trackList, tiGuess=0)
      return(list(par=c(phaseShift=phaseShift, amplitude=amplitude, timeScalingFactor=1.00, ti=as.numeric(bestFit$par['ti']), fi=as.numeric(bestFit$par['fi']), ff=as.numeric(bestFit$par['ff']), offset=as.numeric(bestFit$par['offset'])), fit=bestFit))
 }
 
-getBulkPhaseShiftGS <- function(trackList, ti=seq(-0.5,0.5,1/30), phaseShift=seq(-pi,pi,pi/30), cores=1)
+getBulkPhaseShiftGS <- function(trackList, ti=seq(-1,1,1/30), phaseShift=seq(-pi,pi,pi/30), cores=1)
 {
      trackMatrix <- trackList$getMatrix()
 
