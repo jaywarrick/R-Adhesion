@@ -26,8 +26,9 @@ sseBulkGS <- function(x, trackList, trackMatrix, amplitude, timeScalingFactor)
      sweep <- getSweep(amplitude=amplitude, phaseShift=x[2], offset=pi, sin=trackList$meta$sin, ti=x[1], fi=trackList$meta$fi, ff=trackList$meta$ff, sweepDuration=timeScalingFactor*trackList$meta$sweepDuration, t=trackList$meta$tAll, guess=NULL)
      # For each index in tAll (i.e., for each frame)
 
-     sse <- sum((t(trackMatrix)-sweep$v)^2, na.rm=TRUE) # Do the transpose because the subtract function typically makes the subtracted vector vertical
-
+     #sse <- sum((t(trackMatrix)-sweep$v)^2, na.rm=TRUE) # Do the transpose because the subtract function typically makes the subtracted vector vertical
+     sse <- mad((t(trackMatrix)-sweep$v), na.rm=TRUE) # Do the transpose because the subtract function typically makes the subtracted vector vertical
+     
      cat("(", x[1], ",", x[2], ") = ", sse, "\n", sep="")
      return(sse)
 }
