@@ -26,9 +26,9 @@ sseBulkGS <- function(x, trackList, trackMatrix, amplitude, timeScalingFactor)
      sweep <- getSweep(amplitude=amplitude, phaseShift=x[2], offset=pi, sin=trackList$meta$sin, ti=x[1], fi=trackList$meta$fi, ff=trackList$meta$ff, sweepDuration=timeScalingFactor*trackList$meta$sweepDuration, t=trackList$meta$tAll, guess=NULL)
      # For each index in tAll (i.e., for each frame)
 
-     sse <- sum((t(trackMatrix)-sweep$v)^2, na.rm=TRUE) # Do the transpose because the subtract function typically makes the subtracted vector vertical
-     #sse <- mad((t(trackMatrix)-sweep$v), na.rm=TRUE) # Do the transpose because the subtract function typically makes the subtracted vector vertical
-
+     #sse <- sum((t(trackMatrix)-sweep$v)^2, na.rm=TRUE) # Do the transpose because the subtract function typically makes the subtracted vector vertical
+     sse <- mad((t(trackMatrix)-sweep$v), na.rm=TRUE) # Do the transpose because the subtract function typically makes the subtracted vector vertical
+     
      cat("(", x[1], ",", x[2], ") = ", sse, "\n", sep="")
      return(sse)
 }
@@ -105,7 +105,7 @@ getBulkPhaseShift2 <- function(trackList, tiGuess=0)
      return(list(par=c(phaseShift=phaseShift, amplitude=amplitude, timeScalingFactor=1.00, ti=as.numeric(bestFit$par['ti']), fi=as.numeric(bestFit$par['fi']), ff=as.numeric(bestFit$par['ff']), offset=as.numeric(bestFit$par['offset'])), fit=bestFit))
 }
 
-getBulkPhaseShiftGS <- function(trackList, ti=seq(-0.5,0.5,1/30), phaseShift=seq(-pi,pi,pi/30), cores=1)
+getBulkPhaseShiftGS <- function(trackList, ti=seq(-1,1,1/30), phaseShift=seq(-pi,pi,pi/30), cores=1)
 {
      trackMatrix <- trackList$getMatrix()
 
@@ -124,8 +124,16 @@ getBulkPhaseShiftGS <- function(trackList, ti=seq(-0.5,0.5,1/30), phaseShift=seq
      {
           res <- gridSearch(sseBulkGS, levels=list(ti=ti, phaseShift=phaseShift), trackList=trackList, trackMatrix=trackMatrix, amplitude=amplitude, timeScalingFactor=1, method='loop')
      }
+     
+     finalPhaseShift <- res$minlevels[2]
+     finalTi=res$minlevels[1]
+     limitFlag <- 0
+     if(finalPhaseShift %in% range(ti) | finalTi %in% range(phaseShift))
+     {
+     	limitFlag <- 1
+     }
 
-     return(list(par=c(phaseShift=res$minlevels[2], amplitude=amplitude, timeScalingFactor=1, ti=res$minlevels[1], offset=0), fit=NULL, errorResults=res))
+     return(list(par=c(phaseShift=finalPhaseShift, amplitude=amplitude, timeScalingFactor=1, ti=finalTi, offset=0, limitFlag=limitFlag), fit=NULL, errorResults=res))
 }
 
 #' @return the sum square error between the data and a logNorm cumulative curve
@@ -305,7 +313,7 @@ fitLogNorm2 <- function(x, y, guess, alpha, mu2Guess, sigma2Guess, method='L-BFG
      return(list(par=c(alpha=bestFit$par[['alpha']], mu1=bestFit$par[['mu1']], sigma1=bestFit$par[['sigma1']], mu2=bestFit$par[['mu2']], sigma2=bestFit$par[['sigma2']]), fit=bestFit, sse=sse, sst=sst, r2_single=r2_single, r2_double=r2_double))
 }
 
-fitLogNormGS <- function(x, y, mu=lseq(0.0001, 0.5, 50), sigma=seq(0.1,5,0.1), alphaGuess=0.9, mu2Guess=-1, sigma2Guess=-1, method='L-BFGS-B', cores=1)
+fitLogNormGS <- function(x, y, mu=lseq(0.0001, 0.5, 50), sigma=seq(0.01,1.51,0.01), alphaGuess=0.9, mu2Guess=-1, sigma2Guess=-1, method='L-BFGS-B', cores=1)
 {
      guessGS <- getGuessGS(x, y, mu=mu, sigma=sigma, cores=cores)
 
