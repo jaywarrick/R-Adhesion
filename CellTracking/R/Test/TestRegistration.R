@@ -16,17 +16,17 @@ source('/Users/jaywarrick/Public/DropBox/GitHub/R-Adhesion/CellTracking/R/Tracki
 source('~/.Rprofile')
 source('~/Desktop/A Sandbox/Test.R')
 
-getData <- function(db, ds, x, y, type, name)
+getData <- function(dbPath, dsName, x, y, objType, objName)
 {
      ret <- list()
      ret$db <- db
-     ret$tmp <- '/Users/jaywarrick/Desktop/A Sandbox/TrackingOutput/' #file.path(db,'temp','RScriptTempFolder')
+     ret$tmp <- file.path(db,'temp','RScriptTempFolder')
      ret$ds <- ds
      ret$x <- x
      ret$y <- y
-     ret$type <- type
-     ret$name <- name
-     ret$value <- read.arff(file.path(db, ds, paste0('Cell_x',x,'_y',y), paste0(type,'-',name), paste0('x',x,'_y',y,'.jxd')))
+     ret$type <- objType
+     ret$name <- objName
+     ret$value <- read.arff(file.path(dbPath, dsName, paste0('Cell_x',x,'_y',y), paste0(objType,'-',objName), paste0('x',x,'_y',y,'.jxd')))
      return(ret)
 }
 

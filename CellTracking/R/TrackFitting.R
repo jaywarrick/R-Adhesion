@@ -27,6 +27,7 @@ sseBulkGS <- function(x, trackList, trackMatrix, amplitude, timeScalingFactor)
      # For each index in tAll (i.e., for each frame)
 
      sse <- sum((t(trackMatrix)-sweep$v)^2, na.rm=TRUE) # Do the transpose because the subtract function typically makes the subtracted vector vertical
+     #sse <- mad((t(trackMatrix)-sweep$v), na.rm=TRUE) # Do the transpose because the subtract function typically makes the subtracted vector vertical
 
      cat("(", x[1], ",", x[2], ") = ", sse, "\n", sep="")
      return(sse)

@@ -70,7 +70,7 @@ trackList$setOscillatoryMeta(sin=FALSE, fi=1, ff=0.01, sweepDuration=300, t0_Fra
 
 # Fit all the data points with a single curve to determine the phaseShift of the cells
 #bestFit <- getBulkPhaseShift2(trackList, tiGuess=0)
-bestFit <- getBulkPhaseShiftGS(trackList, cores=1)
+bestFit <- getBulkPhaseShiftGS(trackList, cores=4)
 
 # Given the flow switches direction and attached cells can 'wobble', we only want to gage whether as cell is adhered
 # after it is done wobbling. To do this we set which frames are 'valid' for determining whether the cell is adhered or not.
@@ -129,7 +129,7 @@ trackList$plotTrackList(slot='vx', rel=TRUE, ylim=c(-500,500), validOnly=FALSE, 
 # tau = 8*pi*A*f*mu/h
 # plot(trackList$tAll, 10*tau, xlab='t [s]', ylab='Shear Stress [dynes/cm^2]')
 
-fitCurveData <- getSweep(amplitude=bestFit$par[['amplitude']], phaseShift=bestFit$par[['phaseShift']], sweepDuration=(1/bestFit$par[['timeScalingFactor']])*trackList$sweepDuration, offset=0, sin=trackList$sin, ti=bestFit$par[['ti']], fi=trackList$fi, ff=trackList$ff, t=trackList$tAll, guess=NULL)
+fitCurveData <- getSweep(amplitude=bestFit$par[['amplitude']], phaseShift=bestFit$par[['phaseShift']], sweepDuration=(1/bestFit$par[['timeScalingFactor']])*trackList$meta$sweepDuration, offset=0, sin=trackList$meta$sin, ti=bestFit$par[['ti']], fi=trackList$meta$fi, ff=trackList$meta$ff, t=trackList$meta$tAll, guess=NULL)
 trackList$plotTrackList(slot='vx', ylim=c(-500,500), rel=FALSE, validOnly=FALSE, xlim=c(0,5))
 lines(fitCurveData$t, fitCurveData$v, col='red')
 trackList$plotTrackList(slot='vx', rel=FALSE, ylim=c(-50,50), validOnly=FALSE, xlim=c(125,300))
